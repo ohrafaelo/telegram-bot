@@ -28,13 +28,12 @@ user_data = {}
 ADMIN_ID = 742585100  # ← ID администратора
 ADMIN_USERNAME = "beautyloftstudio"  # ← юзернейм администратора
 
-# ---------- НАСТРОЙКА МЕНЮ КОМАНД (появляется справа) ----------
+# ---------- НАСТРОЙКА МЕНЮ КОМАНД ----------
 async def set_commands():
     commands = [
         BotCommand(command="start", description="🏠 Главное меню"),
         BotCommand(command="book", description="📝 Записаться"),
-        BotCommand(command="admin", description="💬 Написать администратору"),
-        BotCommand(command="cancel", description="❌ Отменить запись")
+        BotCommand(command="admin", description="💬 Написать администратору")
     ]
     await bot.set_my_commands(commands, scope=BotCommandScopeDefault())
     print("✅ Меню команд установлено")
@@ -45,6 +44,7 @@ class BookingStates(StatesGroup):
     choosing_service = State()
     choosing_date = State()
     choosing_time = State()
+    entering_name = State()
     entering_phone = State()
 
 # ---------- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ КЛАВИАТУР ----------
@@ -260,7 +260,6 @@ async def book_command(message: types.Message, state: FSMContext):
 # ---------- КОМАНДА /ADMIN (Написать администратору) ----------
 @dp.message(Command("admin"))
 async def admin_command(message: types.Message):
-    # Создаем глубокую ссылку на администратора
     admin_link = f"https://t.me/{ADMIN_USERNAME}"
     await message.answer(
         f"💬 *Связаться с администратором*\n\n"
@@ -278,21 +277,6 @@ async def admin_command(message: types.Message):
                 ]
             ]
         )
-    )
-
-# ---------- КОМАНДА /CANCEL (Отмена) ----------
-@dp.message(Command("cancel"))
-async def cancel_command(message: types.Message, state: FSMContext):
-    current_state = await state.get_state()
-    if current_state is None:
-        await message.answer("❌ Нет активной записи для отмены.")
-        return
-    
-    await state.clear()
-    await message.answer(
-        "❌ Запись отменена.\n"
-        "Чтобы начать заново, используйте команду /book",
-        reply_markup=types.ReplyKeyboardRemove()
     )
 
 # ---------- ОБРАБОТКА КАТЕГОРИЙ ----------
@@ -452,8 +436,31 @@ async def process_time(callback_query: types.CallbackQuery, state: FSMContext):
         f"📌 Услуга: *{service}*\n"
         f"📅 Дата: *{date}*\n"
         f"⏰ Время: *{time_slot}*\n\n"
-        f"📱 Теперь отправьте ваш *номер телефона* "
-        f"(нажмите кнопку ниже):",
+        f"✏️ Теперь напишите *ваше имя*:\n"
+        f"(например: Анна или Анна Иванова)",
+        parse_mode="Markdown",
+        reply_markup=types.ReplyKeyboardRemove()
+    )
+    await state.set_state(BookingStates.entering_name)
+
+# ---------- ОБРАБОТКА ИМЕНИ ----------
+@dp.message(StateFilter(BookingStates.entering_name))
+async def process_name(message: types.Message, state: FSMContext):
+    name = message.text.strip()
+    
+    if len(name) < 2:
+        await message.answer(
+            "❌ Имя должно содержать хотя бы 2 буквы.\n"
+            "Пожалуйста, введите ваше имя:"
+        )
+        return
+    
+    await state.update_data(name=name)
+    
+    await message.answer(
+        f"✅ Спасибо, *{name}*!\n\n"
+        f"📱 Теперь отправьте ваш *номер телефона*\n"
+        f"(нажмите кнопку ниже или введите вручную):",
         parse_mode="Markdown",
         reply_markup=get_phone_keyboard()
     )
@@ -488,6 +495,7 @@ async def process_phone(message: types.Message, state: FSMContext):
     service = data.get('service', 'Услуга')
     date = data.get('date', 'дата не выбрана')
     time_slot = data.get('time', 'время не выбрано')
+    name = data.get('name', 'не указано')
     
     # Сохраняем в user_data
     user_id = message.from_user.id
@@ -495,6 +503,7 @@ async def process_phone(message: types.Message, state: FSMContext):
         'service': service,
         'date': date,
         'time': time_slot,
+        'name': name,
         'phone': phone,
         'username': message.from_user.username or 'без юзернейма'
     }
@@ -502,6 +511,7 @@ async def process_phone(message: types.Message, state: FSMContext):
     # Отправляем подтверждение клиенту
     await message.answer(
         f"✅ *Запись создана!*\n\n"
+        f"👤 Имя: {name}\n"
         f"📌 Услуга: {service}\n"
         f"📅 Дата: {date}\n"
         f"⏰ Время: {time_slot}\n"
@@ -515,11 +525,12 @@ async def process_phone(message: types.Message, state: FSMContext):
     await bot.send_message(
         ADMIN_ID,
         f"🔔 *НОВАЯ ЗАПИСЬ!*\n\n"
-        f"👤 Клиент: @{message.from_user.username or 'без юзернейма'}\n"
+        f"👤 Имя: {name}\n"
         f"📌 Услуга: {service}\n"
         f"📅 Дата: {date}\n"
         f"⏰ Время: {time_slot}\n"
-        f"📱 Телефон: {phone}",
+        f"📱 Телефон: {phone}\n"
+        f"👤 Телеграм: @{message.from_user.username or 'без юзернейма'}",
         parse_mode="Markdown"
     )
     
@@ -563,7 +574,7 @@ async def back_to_date(callback_query: types.CallbackQuery, state: FSMContext):
         "📅 Выберите дату:",
         reply_markup=get_dates_keyboard()
     )
-    await state.set_state(BookingStates.choosing_date)
+    await state.set_state(BookingStates.choosing_time)
 
 # ---------- ЗАПУСК ----------
 def run_flask():
@@ -572,10 +583,9 @@ def run_flask():
 
 async def main():
     print("🚀 Бот запускается...")
-    # Устанавливаем меню команд
     await set_commands()
     try:
-        await dp.start_polling(bot, skip_updates=True)
+        await dp.start_polling(bot, skip_updates=True, handle_signals=False)
     except Exception as e:
         print(f"❌ Ошибка бота: {e}")
 
