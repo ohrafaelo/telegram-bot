@@ -1,6 +1,7 @@
 import os
 import asyncio
 import logging
+import threading
 from flask import Flask
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
@@ -354,11 +355,13 @@ async def back_to_category(callback_query: types.CallbackQuery):
         reply_markup=menus.get(category, get_categories_menu)()
     )
 
-# ---------- ЗАПУСК БОТА В ГЛАВНОМ ПОТОКЕ ----------
+# ---------- ЗАПУСК БОТА И ВЕБ-СЕРВЕРА ----------
 async def run_bot():
     print("🚀 Бот запускается...")
-    await dp.start_polling(bot)
-    print("✅ Бот запущен!")
+    try:
+        await dp.start_polling(bot)
+    except Exception as e:
+        print(f"❌ Ошибка бота: {e}")
 
 @app.route('/')
 def hello():
@@ -369,11 +372,19 @@ def health():
     return "OK"
 
 if __name__ == "__main__":
-    # Запускаем бота в том же потоке через asyncio
-    asyncio.run(run_bot())
+    # Запускаем бота в отдельном потоке
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     
-    # Flask запускаем отдельно (это не сработает, но Render требует порт)
-    # Используем waitress для продакшена
-    from waitress import serve
+    def start_bot():
+        loop.run_until_complete(run_bot())
+    
+    bot_thread = threading.Thread(target=start_bot)
+    bot_thread.daemon = True  # Поток завершится при остановке основного
+    bot_thread.start()
+    
+    print("✅ Бот запущен в фоновом потоке")
+    
+    # Запускаем Flask для Render
     port = int(os.environ.get("PORT", 5000))
-    serve(app, host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port)
