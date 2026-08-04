@@ -241,7 +241,7 @@ async def start_command(message: types.Message, state: FSMContext):
     user_data[message.from_user.id] = {}
     await message.answer(
         "👋 Добро пожаловать в *BeautyLoftStudio*!\n\n"
-        "Используйте кнопки в меню справа 👉\n"
+        "Используйте кнопки в меню ✨\n"
         "или нажмите /book для записи",
         parse_mode="Markdown"
     )
