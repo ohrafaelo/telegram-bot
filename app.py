@@ -9,7 +9,7 @@ from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton, BotCommand, BotCommandScopeDefault
 
 # ---------- НАСТРОЙКИ ----------
 API_TOKEN = os.environ.get("TELEGRAM_TOKEN")
@@ -25,7 +25,19 @@ logging.basicConfig(level=logging.INFO)
 user_data = {}
 
 # ---------- ID АДМИНИСТРАТОРА ----------
-ADMIN_ID = 742585100  # ← ВСТАВЬТЕ ВАШ ID
+ADMIN_ID = 742585100  # ← ID администратора
+ADMIN_USERNAME = "beautyloftstudio"  # ← юзернейм администратора
+
+# ---------- НАСТРОЙКА МЕНЮ КОМАНД (появляется справа) ----------
+async def set_commands():
+    commands = [
+        BotCommand(command="start", description="🏠 Главное меню"),
+        BotCommand(command="book", description="📝 Записаться"),
+        BotCommand(command="admin", description="💬 Написать администратору"),
+        BotCommand(command="cancel", description="❌ Отменить запись")
+    ]
+    await bot.set_my_commands(commands, scope=BotCommandScopeDefault())
+    print("✅ Меню команд установлено")
 
 # ---------- СОСТОЯНИЯ FSM ----------
 class BookingStates(StatesGroup):
@@ -34,17 +46,6 @@ class BookingStates(StatesGroup):
     choosing_date = State()
     choosing_time = State()
     entering_phone = State()
-
-# ---------- ГЛАВНОЕ МЕНЮ (всегда доступно) ----------
-def get_main_menu():
-    """Главное меню с двумя кнопками"""
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="📝 Записаться", callback_data="main_book"),
-            InlineKeyboardButton(text="💬 Написать администратору", callback_data="main_admin")
-        ]
-    ])
-    return keyboard
 
 # ---------- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ КЛАВИАТУР ----------
 def create_keyboard(buttons, row_width=2):
@@ -233,29 +234,6 @@ def get_phone_keyboard():
     )
     return keyboard
 
-# ---------- ОБРАБОТКА ГЛАВНОГО МЕНЮ ----------
-@dp.callback_query(lambda c: c.data == "main_book")
-async def main_book(callback_query: types.CallbackQuery, state: FSMContext):
-    await state.clear()
-    await bot.answer_callback_query(callback_query.id)
-    await bot.send_message(
-        callback_query.from_user.id,
-        "📋 Выберите категорию услуги:",
-        reply_markup=get_categories_menu()
-    )
-    await state.set_state(BookingStates.choosing_category)
-
-@dp.callback_query(lambda c: c.data == "main_admin")
-async def main_admin(callback_query: types.CallbackQuery):
-    await bot.answer_callback_query(callback_query.id)
-    await bot.send_message(
-        callback_query.from_user.id,
-        "💬 Вы можете написать администратору напрямую:\n"
-        "👉 @beautyloftstudio\n\n"
-        "Или нажмите кнопку ниже, чтобы вернуться в меню.",
-        reply_markup=get_main_menu()
-    )
-
 # ---------- КОМАНДА /START ----------
 @dp.message(Command("start"))
 async def start_command(message: types.Message, state: FSMContext):
@@ -263,9 +241,58 @@ async def start_command(message: types.Message, state: FSMContext):
     user_data[message.from_user.id] = {}
     await message.answer(
         "👋 Добро пожаловать в *BeautyLoftStudio*!\n\n"
-        "Выберите действие:",
+        "Используйте кнопки в меню справа 👉\n"
+        "или нажмите /book для записи",
+        parse_mode="Markdown"
+    )
+
+# ---------- КОМАНДА /BOOK (Записаться) ----------
+@dp.message(Command("book"))
+async def book_command(message: types.Message, state: FSMContext):
+    await state.clear()
+    user_data[message.from_user.id] = {}
+    await message.answer(
+        "📋 Выберите категорию услуги:",
+        reply_markup=get_categories_menu()
+    )
+    await state.set_state(BookingStates.choosing_category)
+
+# ---------- КОМАНДА /ADMIN (Написать администратору) ----------
+@dp.message(Command("admin"))
+async def admin_command(message: types.Message):
+    # Создаем глубокую ссылку на администратора
+    admin_link = f"https://t.me/{ADMIN_USERNAME}"
+    await message.answer(
+        f"💬 *Связаться с администратором*\n\n"
+        f"Нажмите на кнопку ниже, чтобы открыть чат с администратором:\n"
+        f"👉 [Написать @{ADMIN_USERNAME}]({admin_link})\n\n"
+        f"Или просто перейдите по ссылке: {admin_link}",
         parse_mode="Markdown",
-        reply_markup=get_main_menu()
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="💬 Написать администратору",
+                        url=admin_link
+                    )
+                ]
+            ]
+        )
+    )
+
+# ---------- КОМАНДА /CANCEL (Отмена) ----------
+@dp.message(Command("cancel"))
+async def cancel_command(message: types.Message, state: FSMContext):
+    current_state = await state.get_state()
+    if current_state is None:
+        await message.answer("❌ Нет активной записи для отмены.")
+        return
+    
+    await state.clear()
+    await message.answer(
+        "❌ Запись отменена.\n"
+        "Чтобы начать заново, используйте команду /book",
+        reply_markup=types.ReplyKeyboardRemove()
     )
 
 # ---------- ОБРАБОТКА КАТЕГОРИЙ ----------
@@ -439,13 +466,8 @@ async def process_phone(message: types.Message, state: FSMContext):
         await state.clear()
         await message.answer(
             "❌ Запись отменена.\n"
-            "Чтобы начать заново, нажмите кнопку 'Записаться' в меню.",
+            "Чтобы начать заново, используйте команду /book",
             reply_markup=types.ReplyKeyboardRemove()
-        )
-        # Отправляем меню снова
-        await message.answer(
-            "Выберите действие:",
-            reply_markup=get_main_menu()
         )
         return
     
@@ -489,12 +511,6 @@ async def process_phone(message: types.Message, state: FSMContext):
         reply_markup=types.ReplyKeyboardRemove()
     )
     
-    # Отправляем главное меню
-    await message.answer(
-        "Выберите действие:",
-        reply_markup=get_main_menu()
-    )
-    
     # Уведомление администратору
     await bot.send_message(
         ADMIN_ID,
@@ -525,8 +541,8 @@ async def back_to_main(callback_query: types.CallbackQuery, state: FSMContext):
     await bot.answer_callback_query(callback_query.id)
     await bot.send_message(
         callback_query.from_user.id,
-        "Выберите действие:",
-        reply_markup=get_main_menu()
+        "Выберите действие с помощью команд в меню справа 👉",
+        reply_markup=types.ReplyKeyboardRemove()
     )
 
 @dp.callback_query(lambda c: c.data == "back_to_categories")
@@ -556,6 +572,8 @@ def run_flask():
 
 async def main():
     print("🚀 Бот запускается...")
+    # Устанавливаем меню команд
+    await set_commands()
     try:
         await dp.start_polling(bot, skip_updates=True)
     except Exception as e:
