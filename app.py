@@ -2,10 +2,14 @@ import os
 import asyncio
 import logging
 import threading
+from datetime import datetime, timedelta
 from flask import Flask
 from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.filters import Command, StateFilter
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 
 # ---------- НАСТРОЙКИ ----------
 API_TOKEN = os.environ.get("TELEGRAM_TOKEN")
@@ -13,15 +17,23 @@ if not API_TOKEN:
     raise ValueError("Переменная TELEGRAM_TOKEN не найдена!")
 
 bot = Bot(token=API_TOKEN)
-dp = Dispatcher()
+storage = MemoryStorage()
+dp = Dispatcher(storage=storage)
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
 user_data = {}
 
-# ---------- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ СОЗДАНИЯ КЛАВИАТУР ----------
+# ---------- СОСТОЯНИЯ FSM ----------
+class BookingStates(StatesGroup):
+    choosing_category = State()
+    choosing_service = State()
+    choosing_date = State()
+    choosing_time = State()
+    entering_phone = State()
+
+# ---------- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ КЛАВИАТУР ----------
 def create_keyboard(buttons, row_width=2):
-    """Создает клавиатуру из списка кнопок"""
     keyboard = InlineKeyboardMarkup(inline_keyboard=[])
     row = []
     for i, (text, callback) in enumerate(buttons):
@@ -33,7 +45,23 @@ def create_keyboard(buttons, row_width=2):
         keyboard.inline_keyboard.append(row)
     return keyboard
 
-# ---------- ГЛАВНОЕ МЕНЮ (КАТЕГОРИИ) ----------
+# ---------- ГЕНЕРАЦИЯ ДАТ (следующие 14 дней) ----------
+def get_dates_keyboard():
+    today = datetime.now().date()
+    buttons = []
+    
+    for i in range(14):
+        date = today + timedelta(days=i)
+        day_names = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+        day_name = day_names[date.weekday()]
+        date_str = date.strftime("%d.%m.%Y")
+        display = f"{day_name} {date_str}"
+        buttons.append((display, f"date_{date_str}"))
+    
+    buttons.append(("⬅️ Назад к услугам", "back_to_service"))
+    return create_keyboard(buttons, row_width=2)
+
+# ---------- МЕНЮ КАТЕГОРИЙ ----------
 def get_categories_menu():
     buttons = [
         ("👁 Ресницы", "cat_lashes"),
@@ -47,7 +75,7 @@ def get_categories_menu():
     ]
     return create_keyboard(buttons, row_width=2)
 
-# ---------- МЕНЮ УСЛУГ ПО КАТЕГОРИЯМ ----------
+# ---------- МЕНЮ УСЛУГ (только ключевые, для краткости) ----------
 def get_lashes_menu():
     buttons = [
         ("🔄 Ламинирование/окрашивание (комплекс)", "service_lashes_complex"),
@@ -174,25 +202,39 @@ def get_time_buttons():
         ("20:30", "time_20:30"),
         ("21:00", "time_21:00"),
         ("21:30", "time_21:30"),
-        ("⬅️ Назад к услугам", "back_to_category")
+        ("⬅️ Назад к дате", "back_to_date")
     ]
     return create_keyboard(buttons, row_width=4)
 
+# ---------- КЛАВИАТУРА ДЛЯ НОМЕРА ТЕЛЕФОНА ----------
+def get_phone_keyboard():
+    keyboard = ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="📱 Отправить номер телефона", request_contact=True)],
+            [KeyboardButton(text="❌ Отмена")]
+        ],
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+    return keyboard
+
 # ---------- КОМАНДА /START ----------
 @dp.message(Command("start"))
-async def start_command(message: types.Message):
+async def start_command(message: types.Message, state: FSMContext):
+    await state.clear()
     user_data[message.from_user.id] = {}
     await message.answer(
         "👋 Добро пожаловать в BeautyLoftStudio!\n"
         "Выберите категорию услуг:",
         reply_markup=get_categories_menu()
     )
+    await state.set_state(BookingStates.choosing_category)
 
 # ---------- ОБРАБОТКА КАТЕГОРИЙ ----------
 @dp.callback_query(lambda c: c.data.startswith('cat_'))
-async def process_category(callback_query: types.CallbackQuery):
+async def process_category(callback_query: types.CallbackQuery, state: FSMContext):
     category = callback_query.data.replace('cat_', '')
-    user_data[callback_query.from_user.id]['category'] = category
+    await state.update_data(category=category)
     
     menus = {
         'lashes': get_lashes_menu,
@@ -222,11 +264,11 @@ async def process_category(callback_query: types.CallbackQuery):
         f"📋 {category_names.get(category, 'Услуги')}:\nВыберите конкретную услугу:",
         reply_markup=menus.get(category, get_categories_menu)()
     )
+    await state.set_state(BookingStates.choosing_service)
 
 # ---------- ОБРАБОТКА ВЫБОРА УСЛУГИ ----------
 @dp.callback_query(lambda c: c.data.startswith('service_'))
-async def process_service(callback_query: types.CallbackQuery):
-    user_id = callback_query.from_user.id
+async def process_service(callback_query: types.CallbackQuery, state: FSMContext):
     service_code = callback_query.data
     
     service_names = {
@@ -284,62 +326,166 @@ async def process_service(callback_query: types.CallbackQuery):
     }
     
     service_name = service_names.get(service_code, 'Услуга')
+    await state.update_data(service=service_name)
     
     await bot.answer_callback_query(callback_query.id)
-    
-    if user_id not in user_data:
-        user_data[user_id] = {}
-    user_data[user_id]['service'] = service_name
-    
     await bot.send_message(
-        user_id,
-        f"✅ Вы выбрали: *{service_name}*\n\nТеперь выберите удобное время:",
+        callback_query.from_user.id,
+        f"✅ Вы выбрали: *{service_name}*\n\n"
+        f"📅 Теперь выберите *дату* записи:",
+        parse_mode="Markdown",
+        reply_markup=get_dates_keyboard()
+    )
+    await state.set_state(BookingStates.choosing_date)
+
+# ---------- ОБРАБОТКА ВЫБОРА ДАТЫ ----------
+@dp.callback_query(lambda c: c.data.startswith('date_'))
+async def process_date(callback_query: types.CallbackQuery, state: FSMContext):
+    date_str = callback_query.data.replace('date_', '')
+    
+    # Проверяем, что дата не прошла
+    try:
+        selected_date = datetime.strptime(date_str, "%d.%m.%Y").date()
+        today = datetime.now().date()
+        
+        if selected_date < today:
+            await bot.answer_callback_query(
+                callback_query.id,
+                text="❌ Эта дата уже прошла! Выберите другую.",
+                show_alert=True
+            )
+            return
+    except ValueError:
+        await bot.answer_callback_query(callback_query.id, text="❌ Ошибка формата даты")
+        return
+    
+    await state.update_data(date=date_str)
+    
+    await bot.answer_callback_query(callback_query.id)
+    await bot.send_message(
+        callback_query.from_user.id,
+        f"📅 Вы выбрали: *{date_str}*\n\n"
+        f"⏰ Теперь выберите *время*:",
         parse_mode="Markdown",
         reply_markup=get_time_buttons()
     )
+    await state.set_state(BookingStates.choosing_time)
 
-# ---------- ОБРАБОТКА ВРЕМЕНИ ----------
+# ---------- ОБРАБОТКА ВЫБОРА ВРЕМЕНИ ----------
 @dp.callback_query(lambda c: c.data.startswith('time_'))
-async def process_time(callback_query: types.CallbackQuery):
-    user_id = callback_query.from_user.id
+async def process_time(callback_query: types.CallbackQuery, state: FSMContext):
     time_slot = callback_query.data.replace('time_', '')
-    service = user_data.get(user_id, {}).get('service', 'Услуга')
+    await state.update_data(time=time_slot)
+    
+    data = await state.get_data()
+    service = data.get('service', 'Услуга')
+    date = data.get('date', 'дата не выбрана')
     
     await bot.answer_callback_query(callback_query.id)
     await bot.send_message(
-        user_id,
+        callback_query.from_user.id,
+        f"✅ Вы выбрали:\n"
+        f"📌 Услуга: *{service}*\n"
+        f"📅 Дата: *{date}*\n"
+        f"⏰ Время: *{time_slot}*\n\n"
+        f"📱 Теперь отправьте ваш *номер телефона* "
+        f"(нажмите кнопку ниже):",
+        parse_mode="Markdown",
+        reply_markup=get_phone_keyboard()
+    )
+    await state.set_state(BookingStates.entering_phone)
+
+# ---------- ОБРАБОТКА НОМЕРА ТЕЛЕФОНА ----------
+@dp.message(StateFilter(BookingStates.entering_phone))
+async def process_phone(message: types.Message, state: FSMContext):
+    if message.text == "❌ Отмена":
+        await state.clear()
+        await message.answer(
+            "❌ Запись отменена.\n"
+            "Чтобы начать заново, напишите /start",
+            reply_markup=types.ReplyKeyboardRemove()
+        )
+        return
+    
+    if message.contact:
+        phone = message.contact.phone_number
+    elif message.text and message.text.replace('+', '').replace('-', '').replace(' ', '').isdigit():
+        phone = message.text
+    else:
+        await message.answer(
+            "❌ Пожалуйста, отправьте номер телефона через кнопку "
+            "или введите его цифрами (например, +79991234567)",
+            reply_markup=get_phone_keyboard()
+        )
+        return
+    
+    # Получаем все данные
+    data = await state.get_data()
+    service = data.get('service', 'Услуга')
+    date = data.get('date', 'дата не выбрана')
+    time_slot = data.get('time', 'время не выбрано')
+    
+    # Сохраняем в user_data
+    user_id = message.from_user.id
+    user_data[user_id] = {
+        'service': service,
+        'date': date,
+        'time': time_slot,
+        'phone': phone,
+        'username': message.from_user.username or 'без юзернейма'
+    }
+    
+    # Отправляем подтверждение клиенту
+    await message.answer(
         f"✅ *Запись создана!*\n\n"
         f"📌 Услуга: {service}\n"
-        f"⏰ Время: {time_slot}\n\n"
+        f"📅 Дата: {date}\n"
+        f"⏰ Время: {time_slot}\n"
+        f"📱 Телефон: {phone}\n\n"
         f"Скоро администратор подтвердит запись.",
         parse_mode="Markdown",
         reply_markup=types.ReplyKeyboardRemove()
     )
     
+    # Уведомление администратору
     admin_id = 742585100  # ← ВСТАВЬТЕ ВАШ ID
     await bot.send_message(
         admin_id,
-        f"🔔 *НОВАЯ ЗАПИСЬ!*\n"
-        f"Клиент: @{callback_query.from_user.username or 'без юзернейма'}\n"
-        f"Услуга: {service}\n"
-        f"Время: {time_slot}",
+        f"🔔 *НОВАЯ ЗАПИСЬ!*\n\n"
+        f"👤 Клиент: @{message.from_user.username or 'без юзернейма'}\n"
+        f"📌 Услуга: {service}\n"
+        f"📅 Дата: {date}\n"
+        f"⏰ Время: {time_slot}\n"
+        f"📱 Телефон: {phone}",
         parse_mode="Markdown"
+    )
+    
+    await state.clear()
+
+# ---------- ОБРАБОТКА ОШИБОЧНЫХ ВВОДОВ ----------
+@dp.message(StateFilter(BookingStates.entering_phone))
+async def process_phone_error(message: types.Message):
+    await message.answer(
+        "❌ Пожалуйста, используйте кнопку для отправки номера телефона "
+        "или введите его в формате +79991234567",
+        reply_markup=get_phone_keyboard()
     )
 
 # ---------- КНОПКИ НАЗАД ----------
 @dp.callback_query(lambda c: c.data == "back_to_categories")
-async def back_to_categories(callback_query: types.CallbackQuery):
+async def back_to_categories(callback_query: types.CallbackQuery, state: FSMContext):
     await bot.answer_callback_query(callback_query.id)
     await bot.send_message(
         callback_query.from_user.id,
         "👋 Выберите категорию услуг:",
         reply_markup=get_categories_menu()
     )
+    await state.set_state(BookingStates.choosing_category)
 
-@dp.callback_query(lambda c: c.data == "back_to_category")
-async def back_to_category(callback_query: types.CallbackQuery):
-    user_id = callback_query.from_user.id
-    category = user_data.get(user_id, {}).get('category', 'lashes')
+@dp.callback_query(lambda c: c.data == "back_to_service")
+async def back_to_service(callback_query: types.CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    category = data.get('category', 'lashes')
     
     menus = {
         'lashes': get_lashes_menu,
@@ -358,13 +504,23 @@ async def back_to_category(callback_query: types.CallbackQuery):
         "📋 Выберите услугу:",
         reply_markup=menus.get(category, get_categories_menu)()
     )
+    await state.set_state(BookingStates.choosing_service)
 
-# ---------- ЗАПУСК ФЛАСК В ОТДЕЛЬНОМ ПОТОКЕ ----------
+@dp.callback_query(lambda c: c.data == "back_to_date")
+async def back_to_date(callback_query: types.CallbackQuery, state: FSMContext):
+    await bot.answer_callback_query(callback_query.id)
+    await bot.send_message(
+        callback_query.from_user.id,
+        "📅 Выберите дату:",
+        reply_markup=get_dates_keyboard()
+    )
+    await state.set_state(BookingStates.choosing_date)
+
+# ---------- ЗАПУСК ----------
 def run_flask():
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
 
-# ---------- ГЛАВНЫЙ ЗАПУСК ----------
 async def main():
     print("🚀 Бот запускается...")
     try:
@@ -373,12 +529,10 @@ async def main():
         print(f"❌ Ошибка бота: {e}")
 
 if __name__ == "__main__":
-    # Flask в фоне
     flask_thread = threading.Thread(target=run_flask)
     flask_thread.daemon = True
     flask_thread.start()
     
-    # Бот в главном потоке
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
