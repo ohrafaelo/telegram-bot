@@ -19,7 +19,7 @@ logging.basicConfig(level=logging.INFO)
 
 user_data = {}
 
-# ---------- ГЛАВНОЕ МЕНЮ (КАТЕГОРИИ) ----------
+# ---------- ВСЕ МЕНЮ (без изменений) ----------
 def get_categories_menu():
     keyboard = InlineKeyboardMarkup(row_width=2)
     keyboard.add(
@@ -34,7 +34,6 @@ def get_categories_menu():
     )
     return keyboard
 
-# ---------- МЕНЮ УСЛУГ ПО КАТЕГОРИЯМ ----------
 def get_lashes_menu():
     keyboard = InlineKeyboardMarkup(row_width=1)
     keyboard.add(
@@ -142,7 +141,6 @@ def get_courses_menu():
     )
     return keyboard
 
-# ---------- КНОПКИ ВРЕМЕНИ (10:00 - 22:00, шаг 30 мин) ----------
 def get_time_buttons():
     keyboard = InlineKeyboardMarkup(row_width=4)
     keyboard.add(
@@ -174,7 +172,7 @@ def get_time_buttons():
     keyboard.add(InlineKeyboardButton("⬅️ Назад к услугам", callback_data="back_to_category"))
     return keyboard
 
-# ---------- КОМАНДА /START ----------
+# ---------- КОМАНДЫ ----------
 @dp.message(Command("start"))
 async def start_command(message: types.Message):
     user_data[message.from_user.id] = {}
@@ -184,7 +182,6 @@ async def start_command(message: types.Message):
         reply_markup=get_categories_menu()
     )
 
-# ---------- ОБРАБОТКА КАТЕГОРИЙ ----------
 @dp.callback_query(lambda c: c.data.startswith('cat_'))
 async def process_category(callback_query: types.CallbackQuery):
     category = callback_query.data.replace('cat_', '')
@@ -219,7 +216,6 @@ async def process_category(callback_query: types.CallbackQuery):
         reply_markup=menus.get(category, get_categories_menu)()
     )
 
-# ---------- ОБРАБОТКА ВЫБОРА УСЛУГИ ----------
 @dp.callback_query(lambda c: c.data.startswith('service_'))
 async def process_service(callback_query: types.CallbackQuery):
     user_id = callback_query.from_user.id
@@ -294,7 +290,6 @@ async def process_service(callback_query: types.CallbackQuery):
         reply_markup=get_time_buttons()
     )
 
-# ---------- ОБРАБОТКА ВРЕМЕНИ ----------
 @dp.callback_query(lambda c: c.data.startswith('time_'))
 async def process_time(callback_query: types.CallbackQuery):
     user_id = callback_query.from_user.id
@@ -322,7 +317,6 @@ async def process_time(callback_query: types.CallbackQuery):
         parse_mode="Markdown"
     )
 
-# ---------- КНОПКИ НАЗАД ----------
 @dp.callback_query(lambda c: c.data == "back_to_categories")
 async def back_to_categories(callback_query: types.CallbackQuery):
     await bot.answer_callback_query(callback_query.id)
@@ -355,36 +349,24 @@ async def back_to_category(callback_query: types.CallbackQuery):
         reply_markup=menus.get(category, get_categories_menu)()
     )
 
-# ---------- ЗАПУСК БОТА И ВЕБ-СЕРВЕРА ----------
-async def run_bot():
-    print("🚀 Бот запускается...")
-    try:
-        await dp.start_polling(bot)
-    except Exception as e:
-        print(f"❌ Ошибка бота: {e}")
-
-@app.route('/')
-def hello():
-    return "🤖 BeautyLoftStudio Bot is running!"
-
-@app.route('/health')
-def health():
-    return "OK"
-
-if __name__ == "__main__":
-    # Запускаем бота в отдельном потоке
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    
-    def start_bot():
-        loop.run_until_complete(run_bot())
-    
-    bot_thread = threading.Thread(target=start_bot)
-    bot_thread.daemon = True  # Поток завершится при остановке основного
-    bot_thread.start()
-    
-    print("✅ Бот запущен в фоновом потоке")
-    
-    # Запускаем Flask для Render
+# ---------- ЗАПУСК ФЛАСК В ОТДЕЛЬНОМ ПОТОКЕ ----------
+def run_flask():
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
+# ---------- ГЛАВНЫЙ ЗАПУСК (БОТ В ГЛАВНОМ ПОТОКЕ) ----------
+async def main():
+    print("🚀 Бот запускается...")
+    await dp.start_polling(bot, skip_updates=True)
+
+if __name__ == "__main__":
+    # Flask запускаем в фоновом потоке
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.daemon = True
+    flask_thread.start()
+    
+    # Бот запускаем в главном потоке (чтобы работали сигналы)
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("⏹️ Бот остановлен")
