@@ -552,8 +552,10 @@ async def back_to_main(callback_query: types.CallbackQuery, state: FSMContext):
     await bot.answer_callback_query(callback_query.id)
     await bot.send_message(
         callback_query.from_user.id,
-        "Выберите действие с помощью команд в меню справа 👉",
-        reply_markup=types.ReplyKeyboardRemove()
+        "👋 Добро пожаловать в *BeautyLoftStudio*!\n\n"
+        "Используйте кнопки в меню ✨\n"
+        "или нажмите /book для записи",
+        parse_mode="Markdown"
     )
 
 @dp.callback_query(lambda c: c.data == "back_to_categories")
@@ -575,7 +577,6 @@ async def back_to_date(callback_query: types.CallbackQuery, state: FSMContext):
         reply_markup=get_dates_keyboard()
     )
     await state.set_state(BookingStates.choosing_time)
-
 # ---------- ЗАПУСК ----------
 def run_flask():
     port = int(os.environ.get("PORT", 5000))
