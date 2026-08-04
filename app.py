@@ -80,10 +80,10 @@ def get_dates_keyboard():
 def get_categories_menu():
     buttons = [
         ("👁 Ресницы", "cat_lashes"),
-        ("👁 Брови", "cat_brows"),
+        ("😉 Брови", "cat_brows"),
         ("💅 Маникюр", "cat_manicure"),
-        ("✂️ Стрижки", "cat_haircuts"),
-        ("🎨 Окрашивание волос", "cat_coloring"),
+        ("💇 Стрижки", "cat_haircuts"),
+        ("🧑‍🎨 Окрашивание волос", "cat_coloring"),
         ("💎 Сложное окрашивание", "cat_complex"),
         ("💆 Уход за волосами", "cat_care"),
         ("🎓 Курсы", "cat_courses"),
@@ -97,13 +97,13 @@ def get_lashes_menu():
         ("🔄 Ламинирование/окрашивание (комплекс)", "service_lashes_complex"),
         ("✨ Ламинирование ресниц", "service_lashes_lamination"),
         ("🎨 Окрашивание ресниц", "service_lashes_color"),
-        ("📏 Ламинирование нижних ресниц", "service_lashes_bottom"),
+        ("✨ Ламинирование нижних ресниц", "service_lashes_bottom"),
         ("🎨 Окрашивание нижних ресниц", "service_lashes_bottom_color"),
         ("➕ Наращивание Классика", "service_lashes_classic"),
         ("➕ Наращивание 2D", "service_lashes_2d"),
         ("➕ Наращивание 3D", "service_lashes_3d"),
         ("➕ Наращивание 4D+", "service_lashes_4d"),
-        ("🔧 Снятие чужих ресниц", "service_lashes_remove"),
+        ("🪄 Снятие чужих ресниц", "service_lashes_remove"),
         ("🌈 Цветные ресницы", "service_lashes_colorful"),
         ("🌀 Эффекты (изгиб М, L)", "service_lashes_effect"),
         ("⬅️ Назад к категориям", "back_to_categories")
@@ -115,7 +115,7 @@ def get_brows_menu():
         ("🔄 Окрашивание/коррекция (комплекс)", "service_brows_complex"),
         ("🎨 Окрашивание бровей", "service_brows_color"),
         ("🌿 Окрашивание бровей (хной)", "service_brows_henna"),
-        ("✂️ Коррекция (воск/пинцет)", "service_brows_correction"),
+        ("🪄 Коррекция (воск/пинцет)", "service_brows_correction"),
         ("🔄 Ламинирование/окрашивание (комплекс)", "service_brows_lami_complex"),
         ("✨ Ламинирование бровей", "service_brows_lamination"),
         ("⬅️ Назад к категориям", "back_to_categories")
@@ -124,7 +124,7 @@ def get_brows_menu():
 
 def get_manicure_menu():
     buttons = [
-        ("💅 Комплекс с покрытием", "service_manicure_complex"),
+        ("💅 Комплекс с покрытием гель-лак", "service_manicure_complex"),
         ("💅 Комплекс с гелевым покрытием", "service_manicure_gel"),
         ("🧼 Гигиенический маникюр", "service_manicure_hygiene"),
         ("👔 Мужской маникюр", "service_manicure_male"),
@@ -132,6 +132,7 @@ def get_manicure_menu():
         ("📏 Наращивание ногтей", "service_manicure_extension"),
         ("🔧 Ремонт ногтя", "service_manicure_repair"),
         ("🎨 Простой дизайн", "service_manicure_design"),
+        ("🪄 Снятие покрытия", "service_manicure_delete"),
         ("🇫🇷 Френч", "service_manicure_french"),
         ("⬅️ Назад к категориям", "back_to_categories")
     ]
@@ -139,9 +140,9 @@ def get_manicure_menu():
 
 def get_haircuts_menu():
     buttons = [
-        ("✂️ Женская стрижка", "service_haircut_women"),
-        ("✂️ Стрижка кончиков", "service_haircut_tips"),
-        ("✂️ Мужская стрижка", "service_haircut_men"),
+        ("💇‍♀️ Женская стрижка", "service_haircut_women"),
+        ("💇 Стрижка кончиков", "service_haircut_tips"),
+        ("💇‍♂️ Мужская стрижка", "service_haircut_men"),
         ("⬅️ Назад к категориям", "back_to_categories")
     ]
     return create_keyboard(buttons, row_width=1)
@@ -153,7 +154,7 @@ def get_coloring_menu():
         ("🎨 Тонирование", "service_color_toning"),
         ("🎨 Короткие волосы", "service_color_short"),
         ("🎨 Длинные волосы", "service_color_long"),
-        ("💨 Мытье + сушка (брашинг)", "service_color_brushing"),
+        ("💨 Мытье + сушка", "service_color_brushing"),
         ("⬅️ Назад к категориям", "back_to_categories")
     ]
     return create_keyboard(buttons, row_width=1)
@@ -298,10 +299,10 @@ async def process_category(callback_query: types.CallbackQuery, state: FSMContex
     
     category_names = {
         'lashes': '👁 Ресницы',
-        'brows': '👁 Брови',
+        'brows': '😉 Брови',
         'manicure': '💅 Маникюр',
-        'haircuts': '✂️ Стрижки',
-        'coloring': '🎨 Окрашивание волос',
+        'haircuts': '💇 Стрижки',
+        'coloring': '🧑‍🎨 Окрашивание волос',
         'complex': '💎 Сложное окрашивание',
         'care': '💆 Уход за волосами',
         'courses': '🎓 Курсы'
@@ -339,7 +340,8 @@ async def process_service(callback_query: types.CallbackQuery, state: FSMContext
         'service_brows_correction': 'Коррекция бровей (воск/пинцет)',
         'service_brows_lami_complex': 'Ламинирование/окрашивание бровей (комплекс)',
         'service_brows_lamination': 'Ламинирование бровей',
-        'service_manicure_complex': 'Комплекс маникюра с покрытием',
+        'service_manicure_complex': 'Комплекс маникюра с покрытием гель-лак',
+        'service_manicure_delete': 'Снятие покрытия',
         'service_manicure_gel': 'Комплекс маникюра с гелевым покрытием',
         'service_manicure_hygiene': 'Гигиенический маникюр',
         'service_manicure_male': 'Мужской маникюр',
@@ -356,7 +358,7 @@ async def process_service(callback_query: types.CallbackQuery, state: FSMContext
         'service_color_toning': 'Тонирование волос',
         'service_color_short': 'Окрашивание (короткие)',
         'service_color_long': 'Окрашивание (длинные)',
-        'service_color_brushing': 'Мытье + сушка (брашинг)',
+        'service_color_brushing': 'Мытье + сушка',
         'service_complex_highlight': 'Мелирование/Шатуш',
         'service_complex_balayage': 'Балаяж',
         'service_complex_ombre': 'Омбре/Сомбре',
@@ -436,8 +438,7 @@ async def process_time(callback_query: types.CallbackQuery, state: FSMContext):
         f"📌 Услуга: *{service}*\n"
         f"📅 Дата: *{date}*\n"
         f"⏰ Время: *{time_slot}*\n\n"
-        f"✏️ Теперь напишите *ваше имя*:\n"
-        f"(например: Анна или Анна Иванова)",
+        f"✏️ Теперь напишите *имя клиента*:\n",
         parse_mode="Markdown",
         reply_markup=types.ReplyKeyboardRemove()
     )
@@ -451,7 +452,7 @@ async def process_name(message: types.Message, state: FSMContext):
     if len(name) < 2:
         await message.answer(
             "❌ Имя должно содержать хотя бы 2 буквы.\n"
-            "Пожалуйста, введите ваше имя:"
+            "Пожалуйста, введите имя клиента:"
         )
         return
     
@@ -459,7 +460,7 @@ async def process_name(message: types.Message, state: FSMContext):
     
     await message.answer(
         f"✅ Спасибо, *{name}*!\n\n"
-        f"📱 Теперь отправьте ваш *номер телефона*\n"
+        f"📱 Теперь отправьте *номер телефона*\n"
         f"(нажмите кнопку ниже или введите вручную):",
         parse_mode="Markdown",
         reply_markup=get_phone_keyboard()
@@ -530,7 +531,7 @@ async def process_phone(message: types.Message, state: FSMContext):
         f"📅 Дата: {date}\n"
         f"⏰ Время: {time_slot}\n"
         f"📱 Телефон: {phone}\n"
-        f"👤 Телеграм: @{message.from_user.username or 'без юзернейма'}",
+        f"👤 Телеграмм: @{message.from_user.username or 'без юзернейма'}",
         parse_mode="Markdown"
     )
     
