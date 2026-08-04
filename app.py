@@ -24,6 +24,9 @@ logging.basicConfig(level=logging.INFO)
 
 user_data = {}
 
+# ---------- ID АДМИНИСТРАТОРА ----------
+ADMIN_ID = 742585100  # ← ВСТАВЬТЕ ВАШ ID
+
 # ---------- СОСТОЯНИЯ FSM ----------
 class BookingStates(StatesGroup):
     choosing_category = State()
@@ -31,6 +34,17 @@ class BookingStates(StatesGroup):
     choosing_date = State()
     choosing_time = State()
     entering_phone = State()
+
+# ---------- ГЛАВНОЕ МЕНЮ (всегда доступно) ----------
+def get_main_menu():
+    """Главное меню с двумя кнопками"""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="📝 Записаться", callback_data="main_book"),
+            InlineKeyboardButton(text="💬 Написать администратору", callback_data="main_admin")
+        ]
+    ])
+    return keyboard
 
 # ---------- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ КЛАВИАТУР ----------
 def create_keyboard(buttons, row_width=2):
@@ -58,7 +72,7 @@ def get_dates_keyboard():
         display = f"{day_name} {date_str}"
         buttons.append((display, f"date_{date_str}"))
     
-    buttons.append(("⬅️ Назад к услугам", "back_to_service"))
+    buttons.append(("⬅️ Назад в меню", "back_to_main"))
     return create_keyboard(buttons, row_width=2)
 
 # ---------- МЕНЮ КАТЕГОРИЙ ----------
@@ -71,11 +85,12 @@ def get_categories_menu():
         ("🎨 Окрашивание волос", "cat_coloring"),
         ("💎 Сложное окрашивание", "cat_complex"),
         ("💆 Уход за волосами", "cat_care"),
-        ("🎓 Курсы", "cat_courses")
+        ("🎓 Курсы", "cat_courses"),
+        ("⬅️ Назад в меню", "back_to_main")
     ]
     return create_keyboard(buttons, row_width=2)
 
-# ---------- МЕНЮ УСЛУГ (только ключевые, для краткости) ----------
+# ---------- МЕНЮ УСЛУГ ПО КАТЕГОРИЯМ ----------
 def get_lashes_menu():
     buttons = [
         ("🔄 Ламинирование/окрашивание (комплекс)", "service_lashes_complex"),
@@ -90,7 +105,7 @@ def get_lashes_menu():
         ("🔧 Снятие чужих ресниц", "service_lashes_remove"),
         ("🌈 Цветные ресницы", "service_lashes_colorful"),
         ("🌀 Эффекты (изгиб М, L)", "service_lashes_effect"),
-        ("⬅️ Назад", "back_to_categories")
+        ("⬅️ Назад к категориям", "back_to_categories")
     ]
     return create_keyboard(buttons, row_width=1)
 
@@ -102,7 +117,7 @@ def get_brows_menu():
         ("✂️ Коррекция (воск/пинцет)", "service_brows_correction"),
         ("🔄 Ламинирование/окрашивание (комплекс)", "service_brows_lami_complex"),
         ("✨ Ламинирование бровей", "service_brows_lamination"),
-        ("⬅️ Назад", "back_to_categories")
+        ("⬅️ Назад к категориям", "back_to_categories")
     ]
     return create_keyboard(buttons, row_width=1)
 
@@ -117,7 +132,7 @@ def get_manicure_menu():
         ("🔧 Ремонт ногтя", "service_manicure_repair"),
         ("🎨 Простой дизайн", "service_manicure_design"),
         ("🇫🇷 Френч", "service_manicure_french"),
-        ("⬅️ Назад", "back_to_categories")
+        ("⬅️ Назад к категориям", "back_to_categories")
     ]
     return create_keyboard(buttons, row_width=1)
 
@@ -126,7 +141,7 @@ def get_haircuts_menu():
         ("✂️ Женская стрижка", "service_haircut_women"),
         ("✂️ Стрижка кончиков", "service_haircut_tips"),
         ("✂️ Мужская стрижка", "service_haircut_men"),
-        ("⬅️ Назад", "back_to_categories")
+        ("⬅️ Назад к категориям", "back_to_categories")
     ]
     return create_keyboard(buttons, row_width=1)
 
@@ -138,7 +153,7 @@ def get_coloring_menu():
         ("🎨 Короткие волосы", "service_color_short"),
         ("🎨 Длинные волосы", "service_color_long"),
         ("💨 Мытье + сушка (брашинг)", "service_color_brushing"),
-        ("⬅️ Назад", "back_to_categories")
+        ("⬅️ Назад к категориям", "back_to_categories")
     ]
     return create_keyboard(buttons, row_width=1)
 
@@ -149,7 +164,7 @@ def get_complex_coloring_menu():
         ("💎 Омбре/Сомбре", "service_complex_ombre"),
         ("💎 Колорирование (2-3 цв)", "service_complex_colorization"),
         ("💎 AirTouch", "service_complex_airtouch"),
-        ("⬅️ Назад", "back_to_categories")
+        ("⬅️ Назад к категориям", "back_to_categories")
     ]
     return create_keyboard(buttons, row_width=1)
 
@@ -161,7 +176,7 @@ def get_care_menu():
         ("💨 Volume Therapy (объем)", "service_care_volume"),
         ("⚡ Express Moroccanoil (экспресс)", "service_care_express"),
         ("✨ Smooth & Shine (разглаживание)", "service_care_smooth"),
-        ("⬅️ Назад", "back_to_categories")
+        ("⬅️ Назад к категориям", "back_to_categories")
     ]
     return create_keyboard(buttons, row_width=1)
 
@@ -171,7 +186,7 @@ def get_courses_menu():
         ("📚 Повышение квалификации", "service_course_advanced"),
         ("📚 Комбо (базовый+повышение)", "service_course_combo"),
         ("📚 Комбо ЭКСПРЕСС", "service_course_express"),
-        ("⬅️ Назад", "back_to_categories")
+        ("⬅️ Назад к категориям", "back_to_categories")
     ]
     return create_keyboard(buttons, row_width=1)
 
@@ -218,17 +233,40 @@ def get_phone_keyboard():
     )
     return keyboard
 
+# ---------- ОБРАБОТКА ГЛАВНОГО МЕНЮ ----------
+@dp.callback_query(lambda c: c.data == "main_book")
+async def main_book(callback_query: types.CallbackQuery, state: FSMContext):
+    await state.clear()
+    await bot.answer_callback_query(callback_query.id)
+    await bot.send_message(
+        callback_query.from_user.id,
+        "📋 Выберите категорию услуги:",
+        reply_markup=get_categories_menu()
+    )
+    await state.set_state(BookingStates.choosing_category)
+
+@dp.callback_query(lambda c: c.data == "main_admin")
+async def main_admin(callback_query: types.CallbackQuery):
+    await bot.answer_callback_query(callback_query.id)
+    await bot.send_message(
+        callback_query.from_user.id,
+        "💬 Вы можете написать администратору напрямую:\n"
+        "👉 @beautyloftstudio\n\n"
+        "Или нажмите кнопку ниже, чтобы вернуться в меню.",
+        reply_markup=get_main_menu()
+    )
+
 # ---------- КОМАНДА /START ----------
 @dp.message(Command("start"))
 async def start_command(message: types.Message, state: FSMContext):
     await state.clear()
     user_data[message.from_user.id] = {}
     await message.answer(
-        "👋 Добро пожаловать в BeautyLoftStudio!\n"
-        "Выберите категорию услуг:",
-        reply_markup=get_categories_menu()
+        "👋 Добро пожаловать в *BeautyLoftStudio*!\n\n"
+        "Выберите действие:",
+        parse_mode="Markdown",
+        reply_markup=get_main_menu()
     )
-    await state.set_state(BookingStates.choosing_category)
 
 # ---------- ОБРАБОТКА КАТЕГОРИЙ ----------
 @dp.callback_query(lambda c: c.data.startswith('cat_'))
@@ -343,7 +381,6 @@ async def process_service(callback_query: types.CallbackQuery, state: FSMContext
 async def process_date(callback_query: types.CallbackQuery, state: FSMContext):
     date_str = callback_query.data.replace('date_', '')
     
-    # Проверяем, что дата не прошла
     try:
         selected_date = datetime.strptime(date_str, "%d.%m.%Y").date()
         today = datetime.now().date()
@@ -402,8 +439,13 @@ async def process_phone(message: types.Message, state: FSMContext):
         await state.clear()
         await message.answer(
             "❌ Запись отменена.\n"
-            "Чтобы начать заново, напишите /start",
+            "Чтобы начать заново, нажмите кнопку 'Записаться' в меню.",
             reply_markup=types.ReplyKeyboardRemove()
+        )
+        # Отправляем меню снова
+        await message.answer(
+            "Выберите действие:",
+            reply_markup=get_main_menu()
         )
         return
     
@@ -447,10 +489,15 @@ async def process_phone(message: types.Message, state: FSMContext):
         reply_markup=types.ReplyKeyboardRemove()
     )
     
+    # Отправляем главное меню
+    await message.answer(
+        "Выберите действие:",
+        reply_markup=get_main_menu()
+    )
+    
     # Уведомление администратору
-    admin_id = 742585100  # ← ВСТАВЬТЕ ВАШ ID
     await bot.send_message(
-        admin_id,
+        ADMIN_ID,
         f"🔔 *НОВАЯ ЗАПИСЬ!*\n\n"
         f"👤 Клиент: @{message.from_user.username or 'без юзернейма'}\n"
         f"📌 Услуга: {service}\n"
@@ -472,39 +519,25 @@ async def process_phone_error(message: types.Message):
     )
 
 # ---------- КНОПКИ НАЗАД ----------
+@dp.callback_query(lambda c: c.data == "back_to_main")
+async def back_to_main(callback_query: types.CallbackQuery, state: FSMContext):
+    await state.clear()
+    await bot.answer_callback_query(callback_query.id)
+    await bot.send_message(
+        callback_query.from_user.id,
+        "Выберите действие:",
+        reply_markup=get_main_menu()
+    )
+
 @dp.callback_query(lambda c: c.data == "back_to_categories")
 async def back_to_categories(callback_query: types.CallbackQuery, state: FSMContext):
     await bot.answer_callback_query(callback_query.id)
     await bot.send_message(
         callback_query.from_user.id,
-        "👋 Выберите категорию услуг:",
+        "📋 Выберите категорию услуги:",
         reply_markup=get_categories_menu()
     )
     await state.set_state(BookingStates.choosing_category)
-
-@dp.callback_query(lambda c: c.data == "back_to_service")
-async def back_to_service(callback_query: types.CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    category = data.get('category', 'lashes')
-    
-    menus = {
-        'lashes': get_lashes_menu,
-        'brows': get_brows_menu,
-        'manicure': get_manicure_menu,
-        'haircuts': get_haircuts_menu,
-        'coloring': get_coloring_menu,
-        'complex': get_complex_coloring_menu,
-        'care': get_care_menu,
-        'courses': get_courses_menu
-    }
-    
-    await bot.answer_callback_query(callback_query.id)
-    await bot.send_message(
-        callback_query.from_user.id,
-        "📋 Выберите услугу:",
-        reply_markup=menus.get(category, get_categories_menu)()
-    )
-    await state.set_state(BookingStates.choosing_service)
 
 @dp.callback_query(lambda c: c.data == "back_to_date")
 async def back_to_date(callback_query: types.CallbackQuery, state: FSMContext):
