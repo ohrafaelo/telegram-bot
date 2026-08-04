@@ -711,7 +711,7 @@ async def process_time(callback_query: types.CallbackQuery):
     )
     
     # Уведомление администратору
-    admin_id = 123456789  # ← ВСТАВЬТЕ ВАШ ID (узнать через @userinfobot)
+    admin_id = 742585100  # ← ВСТАВЬТЕ ВАШ ID (узнать через @userinfobot)
     await bot.send_message(
         admin_id,
         f"🔔 *НОВАЯ ЗАПИСЬ!*\n"
