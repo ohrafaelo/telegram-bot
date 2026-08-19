@@ -418,7 +418,7 @@ async def admin_process_unblock_date(callback_query: types.CallbackQuery, state:
     
     await state.set_state(AdminStates.choosing_action)
 
-# ---------- АДМИН: БЛОКИРОВКА ВРЕМЕНИ ----------
+# ---------- АДМИН: БЛОКИРОВКА ВРЕМЕНИ (исправленная версия) ----------
 @dp.callback_query(lambda c: c.data == "admin_block_time")
 async def admin_block_time(callback_query: types.CallbackQuery, state: FSMContext):
     if callback_query.from_user.id != ADMIN_ID:
@@ -444,6 +444,7 @@ async def admin_process_block_time_date(callback_query: types.CallbackQuery, sta
     current_state = await state.get_state()
     
     if current_state == AdminStates.choosing_block_time:
+        # СОХРАНЯЕМ ДАТУ В СОСТОЯНИЕ
         await state.update_data(admin_date=date_str)
         await bot.answer_callback_query(callback_query.id)
         await bot.send_message(
@@ -455,6 +456,7 @@ async def admin_process_block_time_date(callback_query: types.CallbackQuery, sta
             reply_markup=get_time_buttons(date_str, admin_mode=True)
         )
     else:
+        # Обычный выбор даты для клиента
         await process_date(callback_query, state)
 
 @dp.callback_query(lambda c: c.data.startswith('time_') and c.data not in ['back_to_date', 'back_to_main', 'back_to_categories'])
@@ -464,6 +466,8 @@ async def admin_process_block_time(callback_query: types.CallbackQuery, state: F
         return
     
     time_slot = callback_query.data.replace('time_', '')
+    
+    # ПОЛУЧАЕМ ДАТУ ИЗ СОСТОЯНИЯ
     data = await state.get_data()
     date_str = data.get('admin_date')
     
@@ -496,7 +500,6 @@ async def admin_process_block_time(callback_query: types.CallbackQuery, state: F
         parse_mode="Markdown",
         reply_markup=get_time_buttons(date_str, admin_mode=True)
     )
-
 # ---------- АДМИН: РАЗБЛОКИРОВКА ВРЕМЕНИ ----------
 @dp.callback_query(lambda c: c.data == "admin_unblock_time")
 async def admin_unblock_time(callback_query: types.CallbackQuery, state: FSMContext):
