@@ -31,9 +31,6 @@ ADMIN_USERNAME = "beautyloftstudio"
 # ---------- ХРАНИЛИЩЕ ЗАБЛОКИРОВАННЫХ СЛОТОВ ----------
 blocked_slots = {}
 
-# ---------- ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ДЛЯ АДМИН-ПАНЕЛИ ----------
-admin_temp_data = {}
-
 # ---------- НАСТРОЙКА МЕНЮ КОМАНД ----------
 async def set_commands():
     commands = [
@@ -58,8 +55,10 @@ class AdminStates(StatesGroup):
     choosing_action = State()
     choosing_block_date = State()
     choosing_unblock_date = State()
+    choosing_block_time_date = State()  # НОВОЕ СОСТОЯНИЕ ДЛЯ ВЫБОРА ДАТЫ ПРИ БЛОКИРОВКЕ ВРЕМЕНИ
+    choosing_block_time_slot = State()  # НОВОЕ СОСТОЯНИЕ ДЛЯ ВЫБОРА ВРЕМЕНИ
 
-# ---------- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ КЛАВИАТУР ----------
+# ---------- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ----------
 def create_keyboard(buttons, row_width=2):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[])
     row = []
@@ -110,7 +109,7 @@ def get_categories_menu():
     ]
     return create_keyboard(buttons, row_width=2)
 
-# ---------- МЕНЮ УСЛУГ ПО КАТЕГОРИЯМ ----------
+# ---------- МЕНЮ УСЛУГ ----------
 def get_lashes_menu():
     buttons = [
         ("🔄 Ламинирование/окрашивание (комплекс)", "service_lashes_complex"),
@@ -251,7 +250,7 @@ def get_phone_keyboard():
     )
     return keyboard
 
-# ---------- АДМИН-КЛАВИАТУРЫ ----------
+# ---------- АДМИН-КЛАВИАТУРА ----------
 def get_admin_main_menu():
     buttons = [
         ("🔒 Заблокировать дату", "admin_block_date"),
@@ -316,9 +315,6 @@ async def admin_panel_command(message: types.Message, state: FSMContext):
         return
     
     await state.clear()
-    if message.from_user.id in admin_temp_data:
-        del admin_temp_data[message.from_user.id]
-    
     await message.answer(
         "⚙️ *Админ-панель*\n\n"
         "Выберите действие:",
@@ -416,7 +412,7 @@ async def admin_process_unblock_date(callback_query: types.CallbackQuery, state:
     
     await state.set_state(AdminStates.choosing_action)
 
-# ---------- АДМИН: БЛОКИРОВКА ВРЕМЕНИ ----------
+# ---------- АДМИН: БЛОКИРОВКА ВРЕМЕНИ (FSM ВЕРСИЯ) ----------
 @dp.callback_query(lambda c: c.data == "admin_block_time")
 async def admin_block_time(callback_query: types.CallbackQuery, state: FSMContext):
     if callback_query.from_user.id != ADMIN_ID:
@@ -424,17 +420,13 @@ async def admin_block_time(callback_query: types.CallbackQuery, state: FSMContex
         return
     
     await bot.answer_callback_query(callback_query.id)
-    
-    user_id = callback_query.from_user.id
-    admin_temp_data[user_id] = {'mode': 'block_time'}
-    print(f"🔍 [DEBUG] admin_block_time: user_id={user_id}, data={admin_temp_data[user_id]}")
-    
     await bot.send_message(
         callback_query.from_user.id,
-        "📅 Сначала выберите *дату*, для которой хотите заблокировать время:",
+        "📅 Выберите *дату*, для которой хотите заблокировать время:",
         parse_mode="Markdown",
         reply_markup=get_dates_keyboard(admin_mode=True)
     )
+    await state.set_state(AdminStates.choosing_block_time_date)
 
 @dp.callback_query(lambda c: c.data.startswith('date_') and c.data not in ['back_to_main', 'back_to_categories', 'back_to_date'])
 async def admin_process_block_time_date(callback_query: types.CallbackQuery, state: FSMContext):
@@ -443,18 +435,11 @@ async def admin_process_block_time_date(callback_query: types.CallbackQuery, sta
         return
     
     date_str = callback_query.data.replace('date_', '')
-    user_id = callback_query.from_user.id
+    current_state = await state.get_state()
     
-    print(f"🔍 [DEBUG] admin_process_block_time_date: user_id={user_id}, date_str={date_str}")
-    print(f"🔍 [DEBUG] admin_temp_data: {admin_temp_data}")
-    
-    if user_id not in admin_temp_data:
-        admin_temp_data[user_id] = {}
-    
-    if admin_temp_data[user_id].get('mode') == 'block_time':
-        admin_temp_data[user_id]['date'] = date_str
-        print(f"🔍 [DEBUG] Дата сохранена: {admin_temp_data[user_id]}")
-        
+    if current_state == AdminStates.choosing_block_time_date:
+        # СОХРАНЯЕМ ДАТУ В FSM
+        await state.update_data(admin_date=date_str)
         await bot.answer_callback_query(callback_query.id)
         await bot.send_message(
             callback_query.from_user.id,
@@ -464,6 +449,7 @@ async def admin_process_block_time_date(callback_query: types.CallbackQuery, sta
             parse_mode="Markdown",
             reply_markup=get_time_buttons(date_str, admin_mode=True)
         )
+        await state.set_state(AdminStates.choosing_block_time_slot)
     else:
         await process_date(callback_query, state)
 
@@ -474,40 +460,21 @@ async def admin_process_block_time(callback_query: types.CallbackQuery, state: F
         return
     
     time_slot = callback_query.data.replace('time_', '')
-    user_id = callback_query.from_user.id
     
-    print(f"🔍 [DEBUG] admin_process_block_time: user_id={user_id}, time_slot={time_slot}")
-    print(f"🔍 [DEBUG] admin_temp_data: {admin_temp_data}")
-    
-    if user_id not in admin_temp_data:
-        await bot.answer_callback_query(callback_query.id, text="❌ Ошибка: данные не найдены!")
-        await bot.send_message(
-            callback_query.from_user.id,
-            "⚠️ Произошла ошибка. Попробуйте снова:\n"
-            "1. /admin_panel\n"
-            "2. Заблокировать время\n"
-            "3. Выберите дату\n"
-            "4. Выберите время",
-            reply_markup=get_admin_main_menu()
-        )
-        return
-    
-    date_str = admin_temp_data[user_id].get('date')
-    
-    print(f"🔍 [DEBUG] date_str из admin_temp_data: {date_str}")
+    # ПОЛУЧАЕМ ДАТУ ИЗ FSM
+    data = await state.get_data()
+    date_str = data.get('admin_date')
     
     if not date_str:
         await bot.answer_callback_query(callback_query.id, text="❌ Ошибка: дата не выбрана!")
         await bot.send_message(
             callback_query.from_user.id,
-            "⚠️ Да не выбрана. Попробуйте снова:\n"
+            "⚠️ Произошла ошибка. Попробуйте снова:\n"
             "1. /admin_panel\n"
-            "2. Заблокировать время\n"
-            "3. Выберите дату",
+            "2. Заблокировать время",
             reply_markup=get_admin_main_menu()
         )
-        if user_id in admin_temp_data:
-            del admin_temp_data[user_id]
+        await state.set_state(AdminStates.choosing_action)
         return
     
     if date_str not in blocked_slots:
@@ -532,6 +499,7 @@ async def admin_process_block_time(callback_query: types.CallbackQuery, state: F
         parse_mode="Markdown",
         reply_markup=get_time_buttons(date_str, admin_mode=True)
     )
+    # Оставляем состояние, чтобы можно было выбрать ещё время
 
 # ---------- АДМИН: РАЗБЛОКИРОВКА ВРЕМЕНИ ----------
 @dp.callback_query(lambda c: c.data == "admin_unblock_time")
@@ -573,11 +541,7 @@ async def admin_process_unblock_time(callback_query: types.CallbackQuery, state:
         return
     
     date_str = callback_query.data.replace('unblock_time_', '')
-    
-    admin_temp_data[callback_query.from_user.id] = {
-        'mode': 'unblock_time',
-        'date': date_str
-    }
+    await state.update_data(admin_date=date_str)
     
     await bot.answer_callback_query(callback_query.id)
     await bot.send_message(
@@ -588,6 +552,7 @@ async def admin_process_unblock_time(callback_query: types.CallbackQuery, state:
         parse_mode="Markdown",
         reply_markup=get_time_buttons(date_str, admin_mode=True)
     )
+    await state.set_state(AdminStates.choosing_block_time_slot)
 
 # ---------- АДМИН: ПОКАЗАТЬ БЛОКИРОВКИ ----------
 @dp.callback_query(lambda c: c.data == "admin_show_blocks")
@@ -624,7 +589,7 @@ async def admin_show_blocks(callback_query: types.CallbackQuery, state: FSMConte
     )
     await state.set_state(AdminStates.choosing_action)
 
-# ---------- АДМИН: ОЧИСТИТЬ ВСЕ БЛОКИРОВКИ ----------
+# ---------- АДМИН: ОЧИСТИТЬ ВСЕ ----------
 @dp.callback_query(lambda c: c.data == "admin_clear_all")
 async def admin_clear_all(callback_query: types.CallbackQuery, state: FSMContext):
     if callback_query.from_user.id != ADMIN_ID:
@@ -642,8 +607,7 @@ async def admin_clear_all(callback_query: types.CallbackQuery, state: FSMContext
     
     await bot.send_message(
         callback_query.from_user.id,
-        "⚠️ *Вы уверены, что хотите очистить все блокировки?*\n\n"
-        "Это действие нельзя отменить!",
+        "⚠️ *Вы уверены, что хотите очистить все блокировки?*",
         parse_mode="Markdown",
         reply_markup=keyboard
     )
@@ -655,9 +619,6 @@ async def admin_clear_confirm(callback_query: types.CallbackQuery, state: FSMCon
         return
     
     blocked_slots.clear()
-    if callback_query.from_user.id in admin_temp_data:
-        del admin_temp_data[callback_query.from_user.id]
-    
     await bot.answer_callback_query(callback_query.id, text="✅ Все блокировки очищены!")
     await bot.send_message(
         callback_query.from_user.id,
@@ -689,10 +650,6 @@ async def admin_back_to_panel(callback_query: types.CallbackQuery, state: FSMCon
         return
     
     await bot.answer_callback_query(callback_query.id)
-    
-    if callback_query.from_user.id in admin_temp_data:
-        del admin_temp_data[callback_query.from_user.id]
-    
     await bot.send_message(
         callback_query.from_user.id,
         "⚙️ *Админ-панель*\n\n"
@@ -970,15 +927,6 @@ async def process_phone(message: types.Message, state: FSMContext):
     )
     
     await state.clear()
-
-# ---------- ОБРАБОТКА ОШИБОЧНЫХ ВВОДОВ ----------
-@dp.message(StateFilter(BookingStates.entering_phone))
-async def process_phone_error(message: types.Message):
-    await message.answer(
-        "❌ Пожалуйста, используйте кнопку для отправки номера телефона "
-        "или введите его в формате +79991234567",
-        reply_markup=get_phone_keyboard()
-    )
 
 # ---------- КНОПКИ НАЗАД ----------
 @dp.callback_query(lambda c: c.data == "back_to_main")
