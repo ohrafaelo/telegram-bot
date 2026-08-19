@@ -25,12 +25,10 @@ logging.basicConfig(level=logging.INFO)
 user_data = {}
 
 # ---------- ID АДМИНИСТРАТОРА ----------
-ADMIN_ID = 742585100  # ← ID администратора
-ADMIN_USERNAME = "beautyloftstudio"  # ← юзернейм администратора
+ADMIN_ID = 742585100
+ADMIN_USERNAME = "beautyloftstudio"
 
 # ---------- ХРАНИЛИЩЕ ЗАБЛОКИРОВАННЫХ СЛОТОВ ----------
-# Структура: { "10.08.2026": ["10:00", "12:30", "15:00"] }
-# Если дата есть в словаре и список пустой [] — вся дата заблокирована
 blocked_slots = {}
 
 # ---------- НАСТРОЙКА МЕНЮ КОМАНД ----------
@@ -73,7 +71,7 @@ def create_keyboard(buttons, row_width=2):
         keyboard.inline_keyboard.append(row)
     return keyboard
 
-# ---------- ГЕНЕРАЦИЯ ДАТ (следующие 14 дней) ----------
+# ---------- ГЕНЕРАЦИЯ ДАТ ----------
 def get_dates_keyboard(admin_mode=False):
     today = datetime.now().date()
     buttons = []
@@ -84,10 +82,8 @@ def get_dates_keyboard(admin_mode=False):
         day_name = day_names[date.weekday()]
         date_str = date.strftime("%d.%m.%Y")
         
-        # Проверяем, заблокирована ли дата полностью
         is_blocked = date_str in blocked_slots and len(blocked_slots[date_str]) == 0
         
-        # Добавляем эмодзи для заблокированных дат
         if is_blocked:
             display = f"🔒 {day_name} {date_str}"
         else:
@@ -113,7 +109,7 @@ def get_categories_menu():
     ]
     return create_keyboard(buttons, row_width=2)
 
-# ---------- МЕНЮ УСЛУГ ПО КАТЕГОРИЯМ ----------
+# ---------- МЕНЮ УСЛУГ ----------
 def get_lashes_menu():
     buttons = [
         ("🔄 Ламинирование/окрашивание (комплекс)", "service_lashes_complex"),
@@ -226,25 +222,23 @@ def get_time_buttons(date_str=None, admin_mode=False):
         "20:00", "20:30", "21:00", "21:30"
     ]
     
-    # Получаем заблокированные времена для этой даты
     blocked_times = []
     if date_str and date_str in blocked_slots:
         blocked_times = blocked_slots[date_str]
     
     for time in all_times:
-        # Проверяем, заблокирован ли этот слот
         is_blocked = time in blocked_times
-        display = f"🔒 {time}" if is_blocked and not admin_mode else time
         if admin_mode:
-            # В админ-режиме показываем статус
             status = "🔒" if is_blocked else "✅"
             display = f"{status} {time}"
+        else:
+            display = f"🔒 {time}" if is_blocked else time
         buttons.append((display, f"time_{time}"))
     
     buttons.append(("⬅️ Назад к дате", "back_to_date"))
     return create_keyboard(buttons, row_width=4)
 
-# ---------- КЛАВИАТУРА ДЛЯ НОМЕРА ТЕЛЕФОНА ----------
+# ---------- КЛАВИАТУРА ДЛЯ ТЕЛЕФОНА ----------
 def get_phone_keyboard():
     keyboard = ReplyKeyboardMarkup(
         keyboard=[
@@ -281,7 +275,7 @@ async def start_command(message: types.Message, state: FSMContext):
         parse_mode="Markdown"
     )
 
-# ---------- КОМАНДА /BOOK (Записаться) ----------
+# ---------- КОМАНДА /BOOK ----------
 @dp.message(Command("book"))
 async def book_command(message: types.Message, state: FSMContext):
     await state.clear()
@@ -292,15 +286,14 @@ async def book_command(message: types.Message, state: FSMContext):
     )
     await state.set_state(BookingStates.choosing_category)
 
-# ---------- КОМАНДА /ADMIN (Написать администратору) ----------
+# ---------- КОМАНДА /ADMIN ----------
 @dp.message(Command("admin"))
 async def admin_command(message: types.Message):
     admin_link = f"https://t.me/{ADMIN_USERNAME}"
     await message.answer(
         f"💬 *Связаться с администратором*\n\n"
-        f"Нажмите на кнопку ниже, чтобы открыть чат с администратором:\n"
-        f"👉 [Написать @{ADMIN_USERNAME}]({admin_link})\n\n"
-        f"Или просто перейдите по ссылке: {admin_link}",
+        f"Нажмите на кнопку ниже, чтобы открыть чат:\n"
+        f"👉 [Написать @{ADMIN_USERNAME}]({admin_link})",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
@@ -317,15 +310,13 @@ async def admin_command(message: types.Message):
 # ---------- КОМАНДА /ADMIN_PANEL ----------
 @dp.message(Command("admin_panel"))
 async def admin_panel_command(message: types.Message, state: FSMContext):
-    # Проверяем, что это администратор
     if message.from_user.id != ADMIN_ID:
         await message.answer("❌ У вас нет доступа к этой команде.")
         return
     
     await state.clear()
     await message.answer(
-        "⚙️ *Админ-панель*\n\n"
-        "Выберите действие:",
+        "⚙️ *Админ-панель*\n\nВыберите действие:",
         parse_mode="Markdown",
         reply_markup=get_admin_main_menu()
     )
@@ -341,7 +332,7 @@ async def admin_block_date(callback_query: types.CallbackQuery, state: FSMContex
     await bot.answer_callback_query(callback_query.id)
     await bot.send_message(
         callback_query.from_user.id,
-        "📅 Выберите дату для блокировки (вся дата будет недоступна):",
+        "📅 Выберите дату для блокировки:",
         reply_markup=get_dates_keyboard(admin_mode=True)
     )
     await state.set_state(AdminStates.choosing_block_date)
@@ -355,21 +346,17 @@ async def admin_process_block_date(callback_query: types.CallbackQuery, state: F
     date_str = callback_query.data.replace('date_', '')
     current_state = await state.get_state()
     
-    # Проверяем, это админ-блокировка или обычный выбор
     if current_state == AdminStates.choosing_block_date:
-        # Блокируем всю дату (пустой список = вся дата заблокирована)
         blocked_slots[date_str] = []
         await bot.answer_callback_query(callback_query.id, text=f"✅ Дата {date_str} заблокирована!")
         await bot.send_message(
             callback_query.from_user.id,
-            f"✅ *Дата {date_str} полностью заблокирована!*\n\n"
-            f"Клиенты не смогут выбрать эту дату.",
+            f"✅ *Дата {date_str} полностью заблокирована!*",
             parse_mode="Markdown",
             reply_markup=get_admin_main_menu()
         )
         await state.set_state(AdminStates.choosing_action)
     else:
-        # Обычный выбор даты для клиента
         await process_date(callback_query, state)
 
 # ---------- АДМИН: РАЗБЛОКИРОВКА ДАТЫ ----------
@@ -381,7 +368,6 @@ async def admin_unblock_date(callback_query: types.CallbackQuery, state: FSMCont
     
     await bot.answer_callback_query(callback_query.id)
     
-    # Показываем только заблокированные даты
     if not blocked_slots:
         await bot.send_message(
             callback_query.from_user.id,
@@ -396,11 +382,10 @@ async def admin_unblock_date(callback_query: types.CallbackQuery, state: FSMCont
         buttons.append((f"🔓 {date_str}", f"unblock_{date_str}"))
     buttons.append(("⬅️ Назад", "admin_back_to_panel"))
     
-    keyboard = create_keyboard(buttons, row_width=2)
     await bot.send_message(
         callback_query.from_user.id,
         "📅 Выберите дату для разблокировки:",
-        reply_markup=keyboard
+        reply_markup=create_keyboard(buttons, row_width=2)
     )
     await state.set_state(AdminStates.choosing_unblock_date)
 
@@ -423,11 +408,6 @@ async def admin_process_unblock_date(callback_query: types.CallbackQuery, state:
         )
     else:
         await bot.answer_callback_query(callback_query.id, text="❌ Дата не найдена")
-        await bot.send_message(
-            callback_query.from_user.id,
-            "ℹ️ Дата не найдена в списке блокировок.",
-            reply_markup=get_admin_main_menu()
-        )
     
     await state.set_state(AdminStates.choosing_action)
 
@@ -441,7 +421,7 @@ async def admin_block_time(callback_query: types.CallbackQuery, state: FSMContex
     await bot.answer_callback_query(callback_query.id)
     await bot.send_message(
         callback_query.from_user.id,
-        "📅 Сначала выберите *дату*, для которой хотите заблокировать время:",
+        "📅 Выберите дату для блокировки времени:",
         parse_mode="Markdown",
         reply_markup=get_dates_keyboard(admin_mode=True)
     )
@@ -457,19 +437,15 @@ async def admin_process_block_time_date(callback_query: types.CallbackQuery, sta
     current_state = await state.get_state()
     
     if current_state == AdminStates.choosing_block_time:
-        # Сохраняем дату и показываем времена
         await state.update_data(admin_date=date_str)
         await bot.answer_callback_query(callback_query.id)
         await bot.send_message(
             callback_query.from_user.id,
-            f"📅 Вы выбрали: *{date_str}*\n\n"
-            "⏰ Теперь выберите *время*, которое хотите заблокировать:\n"
-            "(🔒 - уже заблокировано)",
+            f"📅 Вы выбрали: *{date_str}*\n\n⏰ Выберите время для блокировки:",
             parse_mode="Markdown",
             reply_markup=get_time_buttons(date_str, admin_mode=True)
         )
     else:
-        # Обычный выбор даты для клиента
         await process_date(callback_query, state)
 
 @dp.callback_query(lambda c: c.data.startswith('time_') and c.data not in ['back_to_date', 'back_to_main', 'back_to_categories'])
@@ -486,11 +462,9 @@ async def admin_process_block_time(callback_query: types.CallbackQuery, state: F
         await bot.answer_callback_query(callback_query.id, text="❌ Ошибка: дата не выбрана")
         return
     
-    # Инициализируем список для даты, если его нет
     if date_str not in blocked_slots:
         blocked_slots[date_str] = []
     
-    # Если время уже заблокировано - разблокируем (переключатель)
     if time_slot in blocked_slots[date_str]:
         blocked_slots[date_str].remove(time_slot)
         action = "разблокировано"
@@ -501,8 +475,7 @@ async def admin_process_block_time(callback_query: types.CallbackQuery, state: F
     await bot.answer_callback_query(callback_query.id, text=f"✅ {time_slot} {action}!")
     await bot.send_message(
         callback_query.from_user.id,
-        f"✅ *{time_slot} {action}* для даты {date_str}!\n\n"
-        f"Выберите следующее время или вернитесь в меню:",
+        f"✅ *{time_slot} {action}* для даты {date_str}!",
         parse_mode="Markdown",
         reply_markup=get_time_buttons(date_str, admin_mode=True)
     )
@@ -516,7 +489,6 @@ async def admin_unblock_time(callback_query: types.CallbackQuery, state: FSMCont
     
     await bot.answer_callback_query(callback_query.id)
     
-    # Показываем даты, у которых есть заблокированные времена
     dates_with_times = {d: times for d, times in blocked_slots.items() if times}
     
     if not dates_with_times:
@@ -534,11 +506,10 @@ async def admin_unblock_time(callback_query: types.CallbackQuery, state: FSMCont
         buttons.append((f"📅 {date_str} ({count} слотов)", f"unblock_time_{date_str}"))
     buttons.append(("⬅️ Назад", "admin_back_to_panel"))
     
-    keyboard = create_keyboard(buttons, row_width=2)
     await bot.send_message(
         callback_query.from_user.id,
-        "📅 Выберите дату, для которой хотите разблокировать время:",
-        reply_markup=keyboard
+        "📅 Выберите дату для разблокировки времени:",
+        reply_markup=create_keyboard(buttons, row_width=2)
     )
     await state.set_state(AdminStates.choosing_unblock_time)
 
@@ -554,9 +525,7 @@ async def admin_process_unblock_time(callback_query: types.CallbackQuery, state:
     await bot.answer_callback_query(callback_query.id)
     await bot.send_message(
         callback_query.from_user.id,
-        f"📅 Вы выбрали: *{date_str}*\n\n"
-        "⏰ Выберите время для разблокировки:\n"
-        "(🔒 - заблокировано)",
+        f"📅 Вы выбрали: *{date_str}*\n\n⏰ Выберите время для разблокировки:",
         parse_mode="Markdown",
         reply_markup=get_time_buttons(date_str, admin_mode=True)
     )
@@ -596,7 +565,7 @@ async def admin_show_blocks(callback_query: types.CallbackQuery, state: FSMConte
     )
     await state.set_state(AdminStates.choosing_action)
 
-# ---------- АДМИН: ОЧИСТИТЬ ВСЕ БЛОКИРОВКИ ----------
+# ---------- АДМИН: ОЧИСТИТЬ ВСЕ ----------
 @dp.callback_query(lambda c: c.data == "admin_clear_all")
 async def admin_clear_all(callback_query: types.CallbackQuery, state: FSMContext):
     if callback_query.from_user.id != ADMIN_ID:
@@ -605,7 +574,6 @@ async def admin_clear_all(callback_query: types.CallbackQuery, state: FSMContext
     
     await bot.answer_callback_query(callback_query.id)
     
-    # Подтверждение
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="✅ Да, очистить всё", callback_data="admin_clear_confirm"),
@@ -615,8 +583,7 @@ async def admin_clear_all(callback_query: types.CallbackQuery, state: FSMContext
     
     await bot.send_message(
         callback_query.from_user.id,
-        "⚠️ *Вы уверены, что хотите очистить все блокировки?*\n\n"
-        "Это действие нельзя отменить!",
+        "⚠️ *Вы уверены, что хотите очистить все блокировки?*",
         parse_mode="Markdown",
         reply_markup=keyboard
     )
@@ -661,8 +628,7 @@ async def admin_back_to_panel(callback_query: types.CallbackQuery, state: FSMCon
     await bot.answer_callback_query(callback_query.id)
     await bot.send_message(
         callback_query.from_user.id,
-        "⚙️ *Админ-панель*\n\n"
-        "Выберите действие:",
+        "⚙️ *Админ-панель*\n\nВыберите действие:",
         parse_mode="Markdown",
         reply_markup=get_admin_main_menu()
     )
@@ -721,4 +687,276 @@ async def process_service(callback_query: types.CallbackQuery, state: FSMContext
         'service_lashes_4d': 'Наращивание 4D+',
         'service_lashes_remove': 'Снятие чужих ресниц',
         'service_lashes_colorful': 'Цветные ресницы',
-        'service_lashes_effect': 'Эффекты (изги
+        'service_lashes_effect': 'Эффекты (изгиб М, L)',
+        'service_brows_complex': 'Окрашивание/коррекция бровей (комплекс)',
+        'service_brows_color': 'Окрашивание бровей',
+        'service_brows_henna': 'Окрашивание бровей (хной)',
+        'service_brows_correction': 'Коррекция бровей (воск/пинцет)',
+        'service_brows_lami_complex': 'Ламинирование/окрашивание бровей (комплекс)',
+        'service_brows_lamination': 'Ламинирование бровей',
+        'service_manicure_complex': 'Комплекс маникюра с покрытием гель-лак',
+        'service_manicure_delete': 'Снятие покрытия',
+        'service_manicure_gel': 'Комплекс маникюра с гелевым покрытием',
+        'service_manicure_hygiene': 'Гигиенический маникюр',
+        'service_manicure_male': 'Мужской маникюр',
+        'service_manicure_medical': 'Маникюр с лечебным покрытием',
+        'service_manicure_extension': 'Наращивание ногтей',
+        'service_manicure_repair': 'Ремонт ногтя',
+        'service_manicure_design': 'Простой дизайн',
+        'service_manicure_french': 'Френч',
+        'service_haircut_women': 'Женская стрижка',
+        'service_haircut_tips': 'Стрижка кончиков',
+        'service_haircut_men': 'Мужская стрижка',
+        'service_color_one': 'Окрашивание в один тон',
+        'service_color_gray': 'Окрашивание (седые волосы)',
+        'service_color_toning': 'Тонирование волос',
+        'service_color_short': 'Окрашивание (короткие)',
+        'service_color_long': 'Окрашивание (длинные)',
+        'service_color_brushing': 'Мытье + сушка',
+        'service_complex_highlight': 'Мелирование/Шатуш',
+        'service_complex_balayage': 'Балаяж',
+        'service_complex_ombre': 'Омбре/Сомбре',
+        'service_complex_colorization': 'Колорирование (2-3 цв)',
+        'service_complex_airtouch': 'AirTouch',
+        'service_care_hydration': 'Hydration Boost (увлажнение)',
+        'service_care_repair': 'Repair Ritual (восстановление)',
+        'service_care_scalp': 'Scalp Balance (кожа головы)',
+        'service_care_volume': 'Volume Therapy (объем)',
+        'service_care_express': 'Express Moroccanoil (экспресс)',
+        'service_care_smooth': 'Smooth & Shine (разглаживание)',
+        'service_course_base': 'Базовый курс маникюра',
+        'service_course_advanced': 'Повышение квалификации',
+        'service_course_combo': 'Комбо (базовый+повышение)',
+        'service_course_express': 'Комбо ЭКСПРЕСС'
+    }
+    
+    service_name = service_names.get(service_code, 'Услуга')
+    await state.update_data(service=service_name)
+    
+    await bot.answer_callback_query(callback_query.id)
+    await bot.send_message(
+        callback_query.from_user.id,
+        f"✅ Вы выбрали: *{service_name}*\n\n📅 Теперь выберите *дату* записи:",
+        parse_mode="Markdown",
+        reply_markup=get_dates_keyboard()
+    )
+    await state.set_state(BookingStates.choosing_date)
+
+# ---------- ОБРАБОТКА ВЫБОРА ДАТЫ ----------
+@dp.callback_query(lambda c: c.data.startswith('date_'))
+async def process_date(callback_query: types.CallbackQuery, state: FSMContext):
+    date_str = callback_query.data.replace('date_', '')
+    
+    # Проверяем, заблокирована ли дата полностью
+    if date_str in blocked_slots and len(blocked_slots[date_str]) == 0:
+        await bot.answer_callback_query(
+            callback_query.id,
+            text="❌ Эта дата недоступна для записи!",
+            show_alert=True
+        )
+        return
+    
+    try:
+        selected_date = datetime.strptime(date_str, "%d.%m.%Y").date()
+        today = datetime.now().date()
+        
+        if selected_date < today:
+            await bot.answer_callback_query(
+                callback_query.id,
+                text="❌ Эта дата уже прошла!",
+                show_alert=True
+            )
+            return
+    except ValueError:
+        await bot.answer_callback_query(callback_query.id, text="❌ Ошибка формата даты")
+        return
+    
+    await state.update_data(date=date_str)
+    
+    await bot.answer_callback_query(callback_query.id)
+    await bot.send_message(
+        callback_query.from_user.id,
+        f"📅 Вы выбрали: *{date_str}*\n\n⏰ Теперь выберите *время*:",
+        parse_mode="Markdown",
+        reply_markup=get_time_buttons(date_str)
+    )
+    await state.set_state(BookingStates.choosing_time)
+
+# ---------- ОБРАБОТКА ВЫБОРА ВРЕМЕНИ ----------
+@dp.callback_query(lambda c: c.data.startswith('time_'))
+async def process_time(callback_query: types.CallbackQuery, state: FSMContext):
+    time_slot = callback_query.data.replace('time_', '')
+    data = await state.get_data()
+    date_str = data.get('date', '')
+    
+    # Проверяем, заблокирован ли этот слот
+    if date_str in blocked_slots and time_slot in blocked_slots[date_str]:
+        await bot.answer_callback_query(
+            callback_query.id,
+            text="❌ Это время уже заблокировано! Выберите другое.",
+            show_alert=True
+        )
+        return
+    
+    await state.update_data(time=time_slot)
+    
+    service = data.get('service', 'Услуга')
+    date = data.get('date', 'дата не выбрана')
+    
+    await bot.answer_callback_query(callback_query.id)
+    await bot.send_message(
+        callback_query.from_user.id,
+        f"✅ Вы выбрали:\n"
+        f"📌 Услуга: *{service}*\n"
+        f"📅 Дата: *{date}*\n"
+        f"⏰ Время: *{time_slot}*\n\n"
+        f"✏️ Теперь напишите *имя клиента*:",
+        parse_mode="Markdown",
+        reply_markup=types.ReplyKeyboardRemove()
+    )
+    await state.set_state(BookingStates.entering_name)
+
+# ---------- ОБРАБОТКА ИМЕНИ ----------
+@dp.message(StateFilter(BookingStates.entering_name))
+async def process_name(message: types.Message, state: FSMContext):
+    name = message.text.strip()
+    
+    if len(name) < 2:
+        await message.answer(
+            "❌ Имя должно содержать хотя бы 2 буквы.\n"
+            "Пожалуйста, введите имя клиента:"
+        )
+        return
+    
+    await state.update_data(name=name)
+    
+    await message.answer(
+        f"✅ Спасибо, *{name}*!\n\n"
+        f"📱 Теперь отправьте *номер телефона*\n"
+        f"(нажмите кнопку ниже или введите вручную):",
+        parse_mode="Markdown",
+        reply_markup=get_phone_keyboard()
+    )
+    await state.set_state(BookingStates.entering_phone)
+
+# ---------- ОБРАБОТКА НОМЕРА ----------
+@dp.message(StateFilter(BookingStates.entering_phone))
+async def process_phone(message: types.Message, state: FSMContext):
+    if message.text == "❌ Отмена":
+        await state.clear()
+        await message.answer(
+            "❌ Запись отменена.",
+            reply_markup=types.ReplyKeyboardRemove()
+        )
+        return
+    
+    if message.contact:
+        phone = message.contact.phone_number
+    elif message.text and message.text.replace('+', '').replace('-', '').replace(' ', '').isdigit():
+        phone = message.text
+    else:
+        await message.answer(
+            "❌ Пожалуйста, используйте кнопку или введите номер в формате +79991234567",
+            reply_markup=get_phone_keyboard()
+        )
+        return
+    
+    data = await state.get_data()
+    service = data.get('service', 'Услуга')
+    date = data.get('date', 'дата не выбрана')
+    time_slot = data.get('time', 'время не выбрано')
+    name = data.get('name', 'не указано')
+    
+    # Сохраняем запись (пока в память, но можно добавить БД)
+    user_id = message.from_user.id
+    user_data[user_id] = {
+        'service': service,
+        'date': date,
+        'time': time_slot,
+        'name': name,
+        'phone': phone,
+        'username': message.from_user.username or 'без юзернейма'
+    }
+    
+    await message.answer(
+        f"✅ *Запись создана!*\n\n"
+        f"👤 Имя: {name}\n"
+        f"📌 Услуга: {service}\n"
+        f"📅 Дата: {date}\n"
+        f"⏰ Время: {time_slot}\n"
+        f"📱 Телефон: {phone}\n\n"
+        f"Скоро администратор подтвердит запись.",
+        parse_mode="Markdown",
+        reply_markup=types.ReplyKeyboardRemove()
+    )
+    
+    # Уведомление администратору
+    await bot.send_message(
+        ADMIN_ID,
+        f"🔔 *НОВАЯ ЗАПИСЬ!*\n\n"
+        f"👤 Имя: {name}\n"
+        f"📌 Услуга: {service}\n"
+        f"📅 Дата: {date}\n"
+        f"⏰ Время: {time_slot}\n"
+        f"📱 Телефон: {phone}\n"
+        f"👤 Телеграм: @{message.from_user.username or 'без юзернейма'}",
+        parse_mode="Markdown"
+    )
+    
+    await state.clear()
+
+# ---------- КНОПКИ НАЗАД ----------
+@dp.callback_query(lambda c: c.data == "back_to_main")
+async def back_to_main(callback_query: types.CallbackQuery, state: FSMContext):
+    await state.clear()
+    await bot.answer_callback_query(callback_query.id)
+    await bot.send_message(
+        callback_query.from_user.id,
+        "👋 Добро пожаловать в *BeautyLoftStudio*!\n\n"
+        "Используйте кнопки в меню ✨\n"
+        "или нажмите /book для записи",
+        parse_mode="Markdown"
+    )
+
+@dp.callback_query(lambda c: c.data == "back_to_categories")
+async def back_to_categories(callback_query: types.CallbackQuery, state: FSMContext):
+    await bot.answer_callback_query(callback_query.id)
+    await bot.send_message(
+        callback_query.from_user.id,
+        "📋 Выберите категорию услуги:",
+        reply_markup=get_categories_menu()
+    )
+    await state.set_state(BookingStates.choosing_category)
+
+@dp.callback_query(lambda c: c.data == "back_to_date")
+async def back_to_date(callback_query: types.CallbackQuery, state: FSMContext):
+    await bot.answer_callback_query(callback_query.id)
+    await bot.send_message(
+        callback_query.from_user.id,
+        "📅 Выберите дату:",
+        reply_markup=get_dates_keyboard()
+    )
+    await state.set_state(BookingStates.choosing_time)
+
+# ---------- ЗАПУСК ----------
+def run_flask():
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
+
+async def main():
+    print("🚀 Бот запускается...")
+    await set_commands()
+    try:
+        await dp.start_polling(bot, skip_updates=True, handle_signals=False)
+    except Exception as e:
+        print(f"❌ Ошибка бота: {e}")
+
+if __name__ == "__main__":
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.daemon = True
+    flask_thread.start()
+    
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("⏹️ Бот остановлен")
