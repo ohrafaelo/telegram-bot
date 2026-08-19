@@ -85,7 +85,7 @@ def get_dates_for_client():
         else:
             display = f"{day_name} {date_str}"
             
-        buttons.append((display, f"client_date_{date_str}"))  # ← УНИКАЛЬНЫЙ ПРЕФИКС
+        buttons.append((display, f"client_date_{date_str}"))
     
     buttons.append(("⬅️ Назад в меню", "back_to_main"))
     return create_keyboard(buttons, row_width=2)
@@ -108,7 +108,7 @@ def get_dates_for_admin_block_date():
         else:
             display = f"{day_name} {date_str}"
             
-        buttons.append((display, f"admin_block_date_{date_str}"))  # ← УНИКАЛЬНЫЙ ПРЕФИКС
+        buttons.append((display, f"admin_block_date_{date_str}"))
     
     buttons.append(("⬅️ Назад в меню", "back_to_main"))
     return create_keyboard(buttons, row_width=2)
@@ -131,7 +131,7 @@ def get_dates_for_admin_block_time():
         else:
             display = f"{day_name} {date_str}"
             
-        buttons.append((display, f"admin_block_time_date_{date_str}"))  # ← УНИКАЛЬНЫЙ ПРЕФИКС
+        buttons.append((display, f"admin_block_time_date_{date_str}"))
     
     buttons.append(("⬅️ Назад в меню", "back_to_main"))
     return create_keyboard(buttons, row_width=2)
@@ -252,8 +252,8 @@ def get_courses_menu():
     ]
     return create_keyboard(buttons, row_width=1)
 
-# ---------- КНОПКИ ВРЕМЕНИ ----------
-def get_time_buttons(date_str=None, admin_mode=False):
+# ---------- КНОПКИ ВРЕМЕНИ ДЛЯ КЛИЕНТОВ ----------
+def get_time_buttons_for_client(date_str=None):
     buttons = []
     all_times = [
         "10:00", "10:30", "11:00", "11:30",
@@ -270,12 +270,33 @@ def get_time_buttons(date_str=None, admin_mode=False):
     
     for time in all_times:
         is_blocked = time in blocked_times
-        if admin_mode:
-            status = "🔒" if is_blocked else "✅"
-            display = f"{status} {time}"
-        else:
-            display = f"🔒 {time}" if is_blocked else time
-        buttons.append((display, f"time_{time}"))
+        display = f"🔒 {time}" if is_blocked else time
+        buttons.append((display, f"client_time_{time}"))
+    
+    buttons.append(("⬅️ Назад к дате", "back_to_date"))
+    return create_keyboard(buttons, row_width=4)
+
+# ---------- КНОПКИ ВРЕМЕНИ ДЛЯ АДМИНА ----------
+def get_time_buttons_for_admin(date_str=None):
+    buttons = []
+    all_times = [
+        "10:00", "10:30", "11:00", "11:30",
+        "12:00", "12:30", "13:00", "13:30",
+        "14:00", "14:30", "15:00", "15:30",
+        "16:00", "16:30", "17:00", "17:30",
+        "18:00", "18:30", "19:00", "19:30",
+        "20:00", "20:30", "21:00", "21:30"
+    ]
+    
+    blocked_times = []
+    if date_str and date_str in blocked_slots:
+        blocked_times = blocked_slots[date_str]
+    
+    for time in all_times:
+        is_blocked = time in blocked_times
+        status = "🔒" if is_blocked else "✅"
+        display = f"{status} {time}"
+        buttons.append((display, f"admin_time_{time}"))
     
     buttons.append(("⬅️ Назад к дате", "back_to_date"))
     return create_keyboard(buttons, row_width=4)
@@ -484,17 +505,17 @@ async def admin_block_time_select_date(callback_query: types.CallbackQuery):
         "⏰ Теперь выберите *время*, которое хотите заблокировать:\n"
         "(🔒 - уже заблокировано, ✅ - свободно)",
         parse_mode="Markdown",
-        reply_markup=get_time_buttons(date_str, admin_mode=True)
+        reply_markup=get_time_buttons_for_admin(date_str)
     )
 
-@dp.callback_query(lambda c: c.data.startswith('time_') and c.data not in ['back_to_date', 'back_to_main', 'back_to_categories'])
+@dp.callback_query(lambda c: c.data.startswith('admin_time_'))
 async def admin_block_time_select_slot(callback_query: types.CallbackQuery):
     if callback_query.from_user.id != ADMIN_ID:
         await bot.answer_callback_query(callback_query.id, text="❌ Нет доступа")
         return
     
     user_id = callback_query.from_user.id
-    time_slot = callback_query.data.replace('time_', '')
+    time_slot = callback_query.data.replace('admin_time_', '')
     
     if user_id not in admin_state:
         await bot.answer_callback_query(callback_query.id, text="❌ Ошибка: состояние не найдено!")
@@ -542,7 +563,7 @@ async def admin_block_time_select_slot(callback_query: types.CallbackQuery):
         f"📅 {date_str} — {emoji} {time_slot}\n\n"
         "Выберите следующее время или вернитесь в меню:",
         parse_mode="Markdown",
-        reply_markup=get_time_buttons(date_str, admin_mode=True)
+        reply_markup=get_time_buttons_for_admin(date_str)
     )
 
 # ========== АДМИН: РАЗБЛОКИРОВКА ВРЕМЕНИ ==========
@@ -596,7 +617,7 @@ async def admin_process_unblock_time(callback_query: types.CallbackQuery):
         "⏰ Выберите время для разблокировки:\n"
         "(🔒 - заблокировано, ✅ - свободно)",
         parse_mode="Markdown",
-        reply_markup=get_time_buttons(date_str, admin_mode=True)
+        reply_markup=get_time_buttons_for_admin(date_str)
     )
 
 # ========== АДМИН: ПОКАЗАТЬ БЛОКИРОВКИ ==========
@@ -853,14 +874,14 @@ async def process_date(callback_query: types.CallbackQuery, state: FSMContext):
         f"📅 Вы выбрали: *{date_str}*\n\n"
         f"⏰ Теперь выберите *время*:",
         parse_mode="Markdown",
-        reply_markup=get_time_buttons(date_str)
+        reply_markup=get_time_buttons_for_client(date_str)
     )
     await state.set_state(BookingStates.choosing_time)
 
-# ---------- ОБРАБОТКА ВЫБОРА ВРЕМЕНИ ----------
-@dp.callback_query(lambda c: c.data.startswith('time_'))
+# ---------- ОБРАБОТКА ВЫБОРА ВРЕМЕНИ (ДЛЯ КЛИЕНТОВ) ----------
+@dp.callback_query(lambda c: c.data.startswith('client_time_'))
 async def process_time(callback_query: types.CallbackQuery, state: FSMContext):
-    time_slot = callback_query.data.replace('time_', '')
+    time_slot = callback_query.data.replace('client_time_', '')
     data = await state.get_data()
     date_str = data.get('date', '')
     
