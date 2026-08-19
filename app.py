@@ -326,8 +326,6 @@ async def admin_command(message: types.Message):
         )
     )
 
-# ========== АДМИН-ПАНЕЛЬ ==========
-
 # ---------- КОМАНДА /ADMIN_PANEL ----------
 @dp.message(Command("admin_panel"))
 async def admin_panel_command(message: types.Message):
