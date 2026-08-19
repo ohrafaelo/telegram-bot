@@ -425,7 +425,9 @@ async def admin_block_time(callback_query: types.CallbackQuery, state: FSMContex
     
     await bot.answer_callback_query(callback_query.id)
     
-    admin_temp_data[callback_query.from_user.id] = {'mode': 'block_time'}
+    user_id = callback_query.from_user.id
+    admin_temp_data[user_id] = {'mode': 'block_time'}
+    print(f"🔍 [DEBUG] admin_block_time: user_id={user_id}, data={admin_temp_data[user_id]}")
     
     await bot.send_message(
         callback_query.from_user.id,
@@ -443,8 +445,15 @@ async def admin_process_block_time_date(callback_query: types.CallbackQuery, sta
     date_str = callback_query.data.replace('date_', '')
     user_id = callback_query.from_user.id
     
-    if user_id in admin_temp_data and admin_temp_data[user_id].get('mode') == 'block_time':
+    print(f"🔍 [DEBUG] admin_process_block_time_date: user_id={user_id}, date_str={date_str}")
+    print(f"🔍 [DEBUG] admin_temp_data: {admin_temp_data}")
+    
+    if user_id not in admin_temp_data:
+        admin_temp_data[user_id] = {}
+    
+    if admin_temp_data[user_id].get('mode') == 'block_time':
         admin_temp_data[user_id]['date'] = date_str
+        print(f"🔍 [DEBUG] Дата сохранена: {admin_temp_data[user_id]}")
         
         await bot.answer_callback_query(callback_query.id)
         await bot.send_message(
@@ -467,26 +476,38 @@ async def admin_process_block_time(callback_query: types.CallbackQuery, state: F
     time_slot = callback_query.data.replace('time_', '')
     user_id = callback_query.from_user.id
     
+    print(f"🔍 [DEBUG] admin_process_block_time: user_id={user_id}, time_slot={time_slot}")
+    print(f"🔍 [DEBUG] admin_temp_data: {admin_temp_data}")
+    
     if user_id not in admin_temp_data:
-        await bot.answer_callback_query(callback_query.id, text="❌ Ошибка: дата не выбрана!")
+        await bot.answer_callback_query(callback_query.id, text="❌ Ошибка: данные не найдены!")
         await bot.send_message(
             callback_query.from_user.id,
             "⚠️ Произошла ошибка. Попробуйте снова:\n"
             "1. /admin_panel\n"
-            "2. Заблокировать время",
+            "2. Заблокировать время\n"
+            "3. Выберите дату\n"
+            "4. Выберите время",
             reply_markup=get_admin_main_menu()
         )
         return
     
     date_str = admin_temp_data[user_id].get('date')
     
+    print(f"🔍 [DEBUG] date_str из admin_temp_data: {date_str}")
+    
     if not date_str:
         await bot.answer_callback_query(callback_query.id, text="❌ Ошибка: дата не выбрана!")
         await bot.send_message(
             callback_query.from_user.id,
-            "⚠️ Да не выбрана. Попробуйте снова.",
+            "⚠️ Да не выбрана. Попробуйте снова:\n"
+            "1. /admin_panel\n"
+            "2. Заблокировать время\n"
+            "3. Выберите дату",
             reply_markup=get_admin_main_menu()
         )
+        if user_id in admin_temp_data:
+            del admin_temp_data[user_id]
         return
     
     if date_str not in blocked_slots:
