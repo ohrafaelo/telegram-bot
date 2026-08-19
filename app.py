@@ -307,6 +307,19 @@ async def admin_command(message: types.Message):
         )
     )
 
+# ---------- АДМИН-КЛАВИАТУРЫ ----------
+def get_admin_main_menu():
+    buttons = [
+        ("🔒 Заблокировать дату", "admin_block_date"),
+        ("🔓 Разблокировать дату", "admin_unblock_date"),
+        ("⏰ Заблокировать время", "admin_block_time"),
+        ("⏰ Разблокировать время", "admin_unblock_time"),
+        ("📋 Показать блокировки", "admin_show_blocks"),
+        ("🗑️ Очистить все блокировки", "admin_clear_all"),
+        ("⬅️ Назад в меню", "back_to_main")
+    ]
+    return create_keyboard(buttons, row_width=2)
+
 # ---------- КОМАНДА /ADMIN_PANEL ----------
 @dp.message(Command("admin_panel"))
 async def admin_panel_command(message: types.Message, state: FSMContext):
@@ -352,8 +365,7 @@ async def admin_process_block_date(callback_query: types.CallbackQuery, state: F
         await bot.answer_callback_query(callback_query.id, text=f"✅ Дата {date_str} заблокирована!")
         await bot.send_message(
             callback_query.from_user.id,
-            f"✅ *Дата {date_str} полностью заблокирована!*\n\n"
-            f"Клиенты не смогут выбрать эту дату.",
+            f"✅ *Дата {date_str} полностью заблокирована!*",
             parse_mode="Markdown",
             reply_markup=get_admin_main_menu()
         )
@@ -410,15 +422,10 @@ async def admin_process_unblock_date(callback_query: types.CallbackQuery, state:
         )
     else:
         await bot.answer_callback_query(callback_query.id, text="❌ Дата не найдена")
-        await bot.send_message(
-            callback_query.from_user.id,
-            "ℹ️ Дата не найдена в списке блокировок.",
-            reply_markup=get_admin_main_menu()
-        )
     
     await state.set_state(AdminStates.choosing_action)
 
-# ---------- АДМИН: БЛОКИРОВКА ВРЕМЕНИ (исправленная версия) ----------
+# ---------- АДМИН: БЛОКИРОВКА ВРЕМЕНИ (НОВАЯ ВЕРСИЯ) ----------
 @dp.callback_query(lambda c: c.data == "admin_block_time")
 async def admin_block_time(callback_query: types.CallbackQuery, state: FSMContext):
     if callback_query.from_user.id != ADMIN_ID:
@@ -444,19 +451,21 @@ async def admin_process_block_time_date(callback_query: types.CallbackQuery, sta
     current_state = await state.get_state()
     
     if current_state == AdminStates.choosing_block_time:
-        # СОХРАНЯЕМ ДАТУ В СОСТОЯНИЕ
+        # СОХРАНЯЕМ ДАТУ В ГЛОБАЛЬНУЮ ПЕРЕМЕННУЮ (более надежно)
         await state.update_data(admin_date=date_str)
+        await state.update_data(admin_mode="block_time")
+        
         await bot.answer_callback_query(callback_query.id)
         await bot.send_message(
             callback_query.from_user.id,
             f"📅 Вы выбрали: *{date_str}*\n\n"
             "⏰ Теперь выберите *время*, которое хотите заблокировать:\n"
-            "(🔒 - уже заблокировано, ✅ - свободно)",
+            "(🔒 - уже заблокировано, ✅ - свободно)\n\n"
+            "⚠️ Нажмите на время, чтобы переключить его статус.",
             parse_mode="Markdown",
             reply_markup=get_time_buttons(date_str, admin_mode=True)
         )
     else:
-        # Обычный выбор даты для клиента
         await process_date(callback_query, state)
 
 @dp.callback_query(lambda c: c.data.startswith('time_') and c.data not in ['back_to_date', 'back_to_main', 'back_to_categories'])
@@ -470,36 +479,48 @@ async def admin_process_block_time(callback_query: types.CallbackQuery, state: F
     # ПОЛУЧАЕМ ДАТУ ИЗ СОСТОЯНИЯ
     data = await state.get_data()
     date_str = data.get('admin_date')
+    mode = data.get('admin_mode')
     
     if not date_str:
-        await bot.answer_callback_query(callback_query.id, text="❌ Ошибка: дата не выбрана")
+        await bot.answer_callback_query(callback_query.id, text="❌ Ошибка: дата не выбрана!")
         await bot.send_message(
             callback_query.from_user.id,
             "⚠️ Произошла ошибка. Попробуйте снова:\n"
-            "/admin_panel → Заблокировать время",
+            "1. /admin_panel\n"
+            "2. Заблокировать время\n"
+            "3. Выберите дату\n"
+            "4. Выберите время",
             reply_markup=get_admin_main_menu()
         )
         await state.set_state(AdminStates.choosing_action)
         return
     
+    # Если дата еще не создана в словаре
     if date_str not in blocked_slots:
         blocked_slots[date_str] = []
     
+    # Переключаем статус времени
     if time_slot in blocked_slots[date_str]:
         blocked_slots[date_str].remove(time_slot)
         action = "разблокировано"
+        emoji = "✅"
     else:
         blocked_slots[date_str].append(time_slot)
         action = "заблокировано"
+        emoji = "🔒"
     
     await bot.answer_callback_query(callback_query.id, text=f"✅ {time_slot} {action}!")
+    
+    # Показываем обновленный список времени
     await bot.send_message(
         callback_query.from_user.id,
         f"✅ *{time_slot} {action}* для даты {date_str}!\n\n"
-        f"Выберите следующее время или вернитесь в меню:",
+        f"📅 {date_str} — {emoji} {time_slot}\n\n"
+        "Выберите следующее время или вернитесь в меню:",
         parse_mode="Markdown",
         reply_markup=get_time_buttons(date_str, admin_mode=True)
     )
+
 # ---------- АДМИН: РАЗБЛОКИРОВКА ВРЕМЕНИ ----------
 @dp.callback_query(lambda c: c.data == "admin_unblock_time")
 async def admin_unblock_time(callback_query: types.CallbackQuery, state: FSMContext):
@@ -541,13 +562,14 @@ async def admin_process_unblock_time(callback_query: types.CallbackQuery, state:
     
     date_str = callback_query.data.replace('unblock_time_', '')
     await state.update_data(admin_date=date_str)
+    await state.update_data(admin_mode="unblock_time")
     
     await bot.answer_callback_query(callback_query.id)
     await bot.send_message(
         callback_query.from_user.id,
         f"📅 Вы выбрали: *{date_str}*\n\n"
         "⏰ Выберите время для разблокировки:\n"
-        "(🔒 - заблокировано)",
+        "(🔒 - заблокировано, ✅ - свободно)",
         parse_mode="Markdown",
         reply_markup=get_time_buttons(date_str, admin_mode=True)
     )
