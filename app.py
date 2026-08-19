@@ -326,6 +326,8 @@ async def admin_command(message: types.Message):
         )
     )
 
+# ========== АДМИН-ПАНЕЛЬ ==========
+
 # ---------- КОМАНДА /ADMIN_PANEL ----------
 @dp.message(Command("admin_panel"))
 async def admin_panel_command(message: types.Message):
@@ -343,7 +345,7 @@ async def admin_panel_command(message: types.Message):
         reply_markup=get_admin_main_menu()
     )
 
-# ========== АДМИН: БЛОКИРОВКА ДАТЫ ==========
+# ---------- АДМИН: БЛОКИРОВКА ДАТЫ ----------
 @dp.callback_query(lambda c: c.data == "admin_block_date")
 async def admin_block_date(callback_query: types.CallbackQuery):
     if callback_query.from_user.id != ADMIN_ID:
@@ -359,9 +361,9 @@ async def admin_block_date(callback_query: types.CallbackQuery):
 
 @dp.callback_query(lambda c: c.data.startswith('date_') and c.data not in ['back_to_main', 'back_to_categories', 'back_to_date'])
 async def admin_process_block_date(callback_query: types.CallbackQuery):
+    # Проверяем, что это админ
     if callback_query.from_user.id != ADMIN_ID:
-        await bot.answer_callback_query(callback_query.id, text="❌ Нет доступа")
-        return
+        return  # Просто игнорируем, если не админ
     
     date_str = callback_query.data.replace('date_', '')
     blocked_slots[date_str] = []
@@ -373,7 +375,7 @@ async def admin_process_block_date(callback_query: types.CallbackQuery):
         reply_markup=get_admin_main_menu()
     )
 
-# ========== АДМИН: РАЗБЛОКИРОВКА ДАТЫ ==========
+# ---------- АДМИН: РАЗБЛОКИРОВКА ДАТЫ ----------
 @dp.callback_query(lambda c: c.data == "admin_unblock_date")
 async def admin_unblock_date(callback_query: types.CallbackQuery):
     if callback_query.from_user.id != ADMIN_ID:
@@ -421,7 +423,7 @@ async def admin_process_unblock_date(callback_query: types.CallbackQuery):
     else:
         await bot.answer_callback_query(callback_query.id, text="❌ Дата не найдена")
 
-# ========== АДМИН: БЛОКИРОВКА ВРЕМЕНИ ==========
+# ---------- АДМИН: БЛОКИРОВКА ВРЕМЕНИ ----------
 @dp.callback_query(lambda c: c.data == "admin_block_time")
 async def admin_block_time(callback_query: types.CallbackQuery):
     if callback_query.from_user.id != ADMIN_ID:
@@ -522,7 +524,7 @@ async def admin_block_time_select_slot(callback_query: types.CallbackQuery):
         reply_markup=get_time_buttons(date_str, admin_mode=True)
     )
 
-# ========== АДМИН: РАЗБЛОКИРОВКА ВРЕМЕНИ ==========
+# ---------- АДМИН: РАЗБЛОКИРОВКА ВРЕМЕНИ ----------
 @dp.callback_query(lambda c: c.data == "admin_unblock_time")
 async def admin_unblock_time(callback_query: types.CallbackQuery):
     if callback_query.from_user.id != ADMIN_ID:
@@ -683,6 +685,8 @@ async def admin_back_to_panel(callback_query: types.CallbackQuery):
         reply_markup=get_admin_main_menu()
     )
 
+# ========== ОСНОВНАЯ ЛОГИКА ДЛЯ КЛИЕНТОВ ==========
+
 # ---------- ОБРАБОТКА КАТЕГОРИЙ ----------
 @dp.callback_query(lambda c: c.data.startswith('cat_'))
 async def process_category(callback_query: types.CallbackQuery, state: FSMContext):
@@ -792,7 +796,7 @@ async def process_service(callback_query: types.CallbackQuery, state: FSMContext
     )
     await state.set_state(BookingStates.choosing_date)
 
-# ---------- ОБРАБОТКА ВЫБОРА ДАТЫ ----------
+# ---------- ОБРАБОТКА ВЫБОРА ДАТЫ (ДЛЯ КЛИЕНТОВ) ----------
 @dp.callback_query(lambda c: c.data.startswith('date_'))
 async def process_date(callback_query: types.CallbackQuery, state: FSMContext):
     date_str = callback_query.data.replace('date_', '')
