@@ -90,6 +90,29 @@ def get_dates_keyboard(admin_mode=False):
     buttons.append(("⬅️ Назад в меню", "back_to_main"))
     return create_keyboard(buttons, row_width=2)
 
+# ---------- ГЕНЕРАЦИЯ ДАТ ДЛЯ БЛОКИРОВКИ ВРЕМЕНИ ----------
+def get_dates_for_block_time():
+    today = datetime.now().date()
+    buttons = []
+    
+    for i in range(14):
+        date = today + timedelta(days=i)
+        day_names = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+        day_name = day_names[date.weekday()]
+        date_str = date.strftime("%d.%m.%Y")
+        
+        is_blocked = date_str in blocked_slots and len(blocked_slots[date_str]) == 0
+        
+        if is_blocked:
+            display = f"🔒 {day_name} {date_str}"
+        else:
+            display = f"{day_name} {date_str}"
+            
+        buttons.append((display, f"btime_date_{date_str}"))
+    
+    buttons.append(("⬅️ Назад в меню", "back_to_main"))
+    return create_keyboard(buttons, row_width=2)
+
 # ---------- МЕНЮ КАТЕГОРИЙ ----------
 def get_categories_menu():
     buttons = [
@@ -320,7 +343,7 @@ async def admin_panel_command(message: types.Message):
         reply_markup=get_admin_main_menu()
     )
 
-# ---------- АДМИН: БЛОКИРОВКА ДАТЫ ----------
+# ========== АДМИН: БЛОКИРОВКА ДАТЫ ==========
 @dp.callback_query(lambda c: c.data == "admin_block_date")
 async def admin_block_date(callback_query: types.CallbackQuery):
     if callback_query.from_user.id != ADMIN_ID:
@@ -341,7 +364,6 @@ async def admin_process_block_date(callback_query: types.CallbackQuery):
         return
     
     date_str = callback_query.data.replace('date_', '')
-    
     blocked_slots[date_str] = []
     await bot.answer_callback_query(callback_query.id, text=f"✅ Дата {date_str} заблокирована!")
     await bot.send_message(
@@ -351,7 +373,7 @@ async def admin_process_block_date(callback_query: types.CallbackQuery):
         reply_markup=get_admin_main_menu()
     )
 
-# ---------- АДМИН: РАЗБЛОКИРОВКА ДАТЫ ----------
+# ========== АДМИН: РАЗБЛОКИРОВКА ДАТЫ ==========
 @dp.callback_query(lambda c: c.data == "admin_unblock_date")
 async def admin_unblock_date(callback_query: types.CallbackQuery):
     if callback_query.from_user.id != ADMIN_ID:
@@ -399,7 +421,7 @@ async def admin_process_unblock_date(callback_query: types.CallbackQuery):
     else:
         await bot.answer_callback_query(callback_query.id, text="❌ Дата не найдена")
 
-# ---------- АДМИН: БЛОКИРОВКА ВРЕМЕНИ ----------
+# ========== АДМИН: БЛОКИРОВКА ВРЕМЕНИ ==========
 @dp.callback_query(lambda c: c.data == "admin_block_time")
 async def admin_block_time(callback_query: types.CallbackQuery):
     if callback_query.from_user.id != ADMIN_ID:
@@ -414,19 +436,20 @@ async def admin_block_time(callback_query: types.CallbackQuery):
         callback_query.from_user.id,
         "📅 Выберите *дату*, для которой хотите заблокировать время:",
         parse_mode="Markdown",
-        reply_markup=get_dates_keyboard(admin_mode=True)
+        reply_markup=get_dates_for_block_time()
     )
 
-@dp.callback_query(lambda c: c.data.startswith('date_') and c.data not in ['back_to_main', 'back_to_categories', 'back_to_date'])
+@dp.callback_query(lambda c: c.data.startswith('btime_date_'))
 async def admin_block_time_select_date(callback_query: types.CallbackQuery):
     if callback_query.from_user.id != ADMIN_ID:
         await bot.answer_callback_query(callback_query.id, text="❌ Нет доступа")
         return
     
     user_id = callback_query.from_user.id
-    date_str = callback_query.data.replace('date_', '')
+    date_str = callback_query.data.replace('btime_date_', '')
     
     if user_id not in admin_state or admin_state[user_id].get('mode') != 'block_time':
+        await bot.answer_callback_query(callback_query.id, text="❌ Ошибка режима")
         return
     
     admin_state[user_id]['date'] = date_str
@@ -469,8 +492,7 @@ async def admin_block_time_select_slot(callback_query: types.CallbackQuery):
             callback_query.from_user.id,
             "⚠️ Дата не выбрана. Попробуйте снова:\n"
             "1. /admin_panel\n"
-            "2. Заблокировать время\n"
-            "3. Выберите дату",
+            "2. Заблокировать время",
             reply_markup=get_admin_main_menu()
         )
         if user_id in admin_state:
@@ -500,7 +522,7 @@ async def admin_block_time_select_slot(callback_query: types.CallbackQuery):
         reply_markup=get_time_buttons(date_str, admin_mode=True)
     )
 
-# ---------- АДМИН: РАЗБЛОКИРОВКА ВРЕМЕНИ ----------
+# ========== АДМИН: РАЗБЛОКИРОВКА ВРЕМЕНИ ==========
 @dp.callback_query(lambda c: c.data == "admin_unblock_time")
 async def admin_unblock_time(callback_query: types.CallbackQuery):
     if callback_query.from_user.id != ADMIN_ID:
