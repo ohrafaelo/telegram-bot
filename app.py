@@ -26,7 +26,7 @@ user_data = {}
 
 # ---------- ID АДМИНИСТРАТОРА ----------
 ADMIN_ID = 742585100
-ADMIN_USERNAME = "beautyloftstudio"
+ADMIN_USERNAME = "manager_bls"
 
 # ---------- ХРАНИЛИЩЕ ЗАБЛОКИРОВАННЫХ СЛОТОВ ----------
 blocked_slots = {}
